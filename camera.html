@@ -379,6 +379,7 @@
       <div class="topPill" id="netState">Network: —</div>
       <div class="topPill" id="recState">Recorder: —</div>
       <div class="topPill" id="quality">Quality: —</div>
+      <div class="topPill" id="storageState">Storage: —</div>
     </div>
 
     <div class="main">
@@ -402,10 +403,11 @@
         <video id="preview" autoplay playsinline muted></video>
         <div class="debugLine" id="debugLine">Initializing camera…</div>
 
-        <div class="btnRow">
-          <button class="btn btnDanger" id="btnEmergencyStop" type="button">STOP RECORDING</button>
-          <button class="btn btnGhost" id="btnRefreshState" type="button">REFRESH</button>
-        </div>
+      <div class="btnRow">
+        <button class="btn btnDanger" id="btnEmergencyStop" type="button">STOP RECORDING</button>
+        <button class="btn btnGhost" id="btnArmStorage" type="button">ARM STORAGE</button>
+        <button class="btn btnGhost" id="btnRefreshState" type="button">REFRESH</button>
+      </div>
       </div>
     </div>
   </div>
