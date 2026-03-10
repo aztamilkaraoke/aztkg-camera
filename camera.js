@@ -1,5 +1,5 @@
 (function(){
-  const APPS_SCRIPT_BASE = 'https://script.google.com/macros/s/AKfycbxKyrSPRTaQ_QWV2csWPfywQUirH7iizglA4TMpSkAAfP4GaT0x3Pi26NK6nF7kCHSyeg/exec';
+  const APPS_SCRIPT_BASE = 'PASTE_YOUR_LATEST_APPS_SCRIPT_EXEC_URL_HERE';
   const POLL_MS = 1500;
   const MAX_CLIP_MS = 12 * 60 * 1000;
 
@@ -13,6 +13,7 @@
   let recordingStartedAtMs = 0;
   let inFlight = false;
   let wakeLock = null;
+  let jsonpCounter = 0;
 
   const els = {
     camReady: document.getElementById('camReady'),
@@ -67,6 +68,7 @@
         }
       } catch (e) {}
     }
+
     chosenMime = '';
     chosenExt = 'webm';
   }
@@ -83,18 +85,49 @@
     if (document.visibilityState === 'visible') requestWakeLock();
   });
 
-  async function getCameraState() {
-    const res = await fetch(APPS_SCRIPT_BASE + '?api=camera-state', { method: 'GET' });
-    return res.json();
+  function jsonp(url) {
+    return new Promise(function(resolve, reject) {
+      const cbName = '__camJsonpCb_' + (++jsonpCounter);
+      const script = document.createElement('script');
+      const sep = url.indexOf('?') >= 0 ? '&' : '?';
+      const fullUrl = url + sep + 'callback=' + cbName + '&_ts=' + Date.now();
+
+      let done = false;
+      const cleanup = function() {
+        if (script.parentNode) script.parentNode.removeChild(script);
+        try { delete window[cbName]; } catch (e) { window[cbName] = undefined; }
+      };
+
+      window[cbName] = function(data) {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(data);
+      };
+
+      script.onerror = function() {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('JSONP load failed'));
+      };
+
+      script.src = fullUrl;
+      document.body.appendChild(script);
+
+      setTimeout(function() {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('JSONP timeout'));
+      }, 10000);
+    });
   }
 
-  async function postApi(api, payload) {
-    const res = await fetch(APPS_SCRIPT_BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api, payload })
-    });
-    return res.json();
+  function beaconGet(params) {
+    const url = APPS_SCRIPT_BASE + '?' + new URLSearchParams(params).toString();
+    const img = new Image();
+    img.src = url;
   }
 
   function buildMetaLines(perf) {
@@ -243,23 +276,29 @@
 
     setDebug('Camera initialized and waiting for host.');
 
-    await postApi('camera-status', {
-      pageOpen: true,
-      cameraReady: true,
-      streamReady: true,
+    beaconGet({
+      api: 'camera-status',
+      pageOpen: '1',
+      cameraReady: '1',
+      streamReady: '1',
       recorderState: 'idle',
       actualMimeType: chosenMime,
       actualWidth: s.width || 0,
       actualHeight: s.height || 0,
-      actualFps: s.frameRate || 0
+      actualFps: s.frameRate || 0,
+      _ts: Date.now()
     });
 
     await requestWakeLock();
   }
 
-  async function updateHeartbeat(extra) {
-    const patch = Object.assign({ pageOpen: true }, extra || {});
-    try { await postApi('camera-status', patch); } catch (e) {}
+  function updateHeartbeat(extra) {
+    const params = Object.assign({
+      api: 'camera-status',
+      pageOpen: '1',
+      _ts: Date.now()
+    }, extra || {});
+    beaconGet(params);
   }
 
   function startRecording(perf, commandSeq) {
@@ -293,7 +332,7 @@
       });
     };
 
-    recorder.onstop = async function() {
+    recorder.onstop = function() {
       try {
         const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
         const filename = buildFilename(activePerf);
@@ -301,14 +340,16 @@
         setDebug('Saving clip...');
         triggerDownload(blob, filename);
 
-        await postApi('camera-clip-saved', {
+        beaconGet({
+          api: 'camera-clip-saved',
           performanceId: activePerf ? activePerf.performanceId : '',
-          seqNo: activePerf ? activePerf.seqNo : null,
+          seqNo: activePerf ? activePerf.seqNo : '',
           songName: activePerf ? activePerf.songName : '',
-          savedFileName: filename
+          savedFileName: filename,
+          _ts: Date.now()
         });
 
-        await updateHeartbeat({
+        updateHeartbeat({
           recorderState: 'idle',
           currentPerformanceId: '',
           lastSavedFilename: filename
@@ -316,7 +357,7 @@
 
       } catch (err) {
         setDebug('Save failed: ' + String(err && err.message || err), true);
-        await updateHeartbeat({
+        updateHeartbeat({
           recorderState: 'error',
           lastError: String(err && err.message || err)
         });
@@ -393,15 +434,15 @@
     setTop(els.netState, 'Network: Syncing');
 
     try {
-      const st = await getCameraState();
+      const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
       setTop(els.netState, 'Network: Online');
       applyState(st);
       handleCommand(st);
-      await updateHeartbeat();
+      updateHeartbeat();
     } catch (err) {
       setTop(els.netState, 'Network: Offline');
       setDebug('Polling failed. Recording continues if already active.', true);
-      await updateHeartbeat({
+      updateHeartbeat({
         lastError: String(err && err.message || err || 'Polling failed')
       });
     } finally {
@@ -425,7 +466,7 @@
       setInterval(poll, POLL_MS);
       setInterval(tick, 1000);
     })
-    .catch(async function(err){
+    .catch(function(err){
       const msg = String(
         err && err.name
           ? (err.name + ': ' + (err.message || ''))
@@ -435,10 +476,10 @@
       setTop(els.camReady, 'Camera: Error');
       setDebug(msg, true);
 
-      await updateHeartbeat({
-        pageOpen: true,
-        cameraReady: false,
-        streamReady: false,
+      updateHeartbeat({
+        pageOpen: '1',
+        cameraReady: '0',
+        streamReady: '0',
         recorderState: 'error',
         lastError: msg
       });
