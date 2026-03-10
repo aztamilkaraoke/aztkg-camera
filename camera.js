@@ -592,8 +592,17 @@
       handleCommand(st);
       updateHeartbeat();
     } catch (err) {
+      pollFailCount++;
       setTop(els.netState, 'Network: Offline');
-      setDebug('Polling failed. Recording continues if already active.', true);
+
+      if (recorder && recorder.state === 'recording') {
+        setDebug('Polling failed. Recording continues locally.', true);
+      } else if (pollFailCount >= 3) {
+        setDebug('Waiting for backend…', true);
+      } else {
+        setDebug('Temporary sync issue… retrying.', true);
+      }
+
       updateHeartbeat({
         lastError: String(err && err.message || err || 'Polling failed')
       });
