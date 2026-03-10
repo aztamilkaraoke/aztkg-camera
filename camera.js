@@ -180,12 +180,20 @@
 
     if (!perf) {
       els.seqNo.textContent = '';
-      els.songName.textContent = lastMode === 'ENDED'
-        ? 'Meet ended — thanks for singing!'
-        : 'Waiting for host to start the meet…';
+
+      if (lastMode === 'ENDED') {
+        els.songName.textContent = 'Meet ended — thanks for singing!';
+        els.statusPill.textContent = 'MEET ENDED';
+      } else if (lastMode === 'SPLASH') {
+        els.songName.textContent = 'Waiting for host to start the meet…';
+        els.statusPill.textContent = 'NOT STARTED';
+      } else {
+        els.songName.textContent = 'Meet is live — waiting for next song…';
+        els.statusPill.textContent = 'WAITING';
+      }
+
       els.singers.textContent = '';
       els.meta.innerHTML = '<div>—</div>';
-      els.statusPill.textContent = lastMode === 'ENDED' ? 'MEET ENDED' : 'NOT STARTED';
       els.statusPill.className = 'statusPill';
       els.elapsed.textContent = '';
       setRecordingUiCompact(false);
