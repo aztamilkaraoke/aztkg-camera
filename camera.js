@@ -20,12 +20,16 @@
   let pollTimer = null;
   let pollFailCount = 0;
   let currentPollMs = 0;
+  let storageDirHandle = null;
+  let storageArmed = false;
+  let storagePermission = 'prompt';
 
   const els = {
     camReady: document.getElementById('camReady'),
     netState: document.getElementById('netState'),
     recState: document.getElementById('recState'),
     quality: document.getElementById('quality'),
+    storageState: document.getElementById('storageState'),
     seqNo: document.getElementById('seqNo'),
     songName: document.getElementById('songName'),
     singers: document.getElementById('singers'),
@@ -36,6 +40,7 @@
     preview: document.getElementById('preview'),
     debugLine: document.getElementById('debugLine'),
     btnEmergencyStop: document.getElementById('btnEmergencyStop'),
+    btnArmStorage: document.getElementById('btnArmStorage'),
     btnRefreshState: document.getElementById('btnRefreshState')
   };
 
@@ -144,6 +149,157 @@
     const url = APPS_SCRIPT_BASE + '?' + new URLSearchParams(params).toString();
     const img = new Image();
     img.src = url;
+  }
+
+    const idbKeyval = {
+    async db() {
+      return await new Promise(function(resolve, reject) {
+        const req = indexedDB.open('aztkg-camera-db', 1);
+        req.onupgradeneeded = function() {
+          req.result.createObjectStore('kv');
+        };
+        req.onsuccess = function() { resolve(req.result); };
+        req.onerror = function() { reject(req.error); };
+      });
+    },
+
+    async get(key) {
+      const db = await this.db();
+      return await new Promise(function(resolve, reject) {
+        const tx = db.transaction('kv', 'readonly');
+        const req = tx.objectStore('kv').get(key);
+        req.onsuccess = function() { resolve(req.result || null); };
+        req.onerror = function() { reject(req.error); };
+      });
+    },
+
+    async set(key, value) {
+      const db = await this.db();
+      return await new Promise(function(resolve, reject) {
+        const tx = db.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(value, key);
+        tx.oncomplete = function() { resolve(); };
+        tx.onerror = function() { reject(tx.error); };
+      });
+    }
+  };
+
+    function updateStorageUi() {
+    if (!els.storageState) return;
+
+    if (!window.showDirectoryPicker) {
+      setTop(els.storageState, 'Storage: Unsupported');
+      return;
+    }
+
+    if (storageArmed && storagePermission === 'granted') {
+      setTop(els.storageState, 'Storage: Ready');
+      return;
+    }
+
+    if (storageArmed) {
+      setTop(els.storageState, 'Storage: Re-arm needed');
+      return;
+    }
+
+    setTop(els.storageState, 'Storage: Not armed');
+  }
+
+  async function verifyDirectoryPermission(dirHandle, ask) {
+    if (!dirHandle) return 'prompt';
+
+    const opts = { mode: 'readwrite' };
+
+    try {
+      let p = await dirHandle.queryPermission(opts);
+      if (p === 'granted') return 'granted';
+      if (ask) p = await dirHandle.requestPermission(opts);
+      return p;
+    } catch (e) {
+      return 'prompt';
+    }
+  }
+
+  async function restoreStorageHandle() {
+    if (!('showDirectoryPicker' in window)) {
+      storageDirHandle = null;
+      storageArmed = false;
+      storagePermission = 'prompt';
+      updateStorageUi();
+      return false;
+    }
+
+    try {
+      const raw = localStorage.getItem('aztkg.camera.storage.dirHandle');
+      if (!raw) {
+        storageDirHandle = null;
+        storageArmed = false;
+        storagePermission = 'prompt';
+        updateStorageUi();
+        return false;
+      }
+
+      const handle = await idbKeyval.get(raw);
+      if (!handle) {
+        storageDirHandle = null;
+        storageArmed = false;
+        storagePermission = 'prompt';
+        updateStorageUi();
+        return false;
+      }
+
+      storageDirHandle = handle;
+      storagePermission = await verifyDirectoryPermission(storageDirHandle, false);
+      storageArmed = storagePermission === 'granted';
+      updateStorageUi();
+      return storageArmed;
+    } catch (e) {
+      storageDirHandle = null;
+      storageArmed = false;
+      storagePermission = 'prompt';
+      updateStorageUi();
+      return false;
+    }
+  }
+
+  async function armStorage() {
+    if (!window.showDirectoryPicker) {
+      setDebug('This browser does not support folder-based silent saves.', true);
+      updateStorageUi();
+      return false;
+    }
+
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const key = 'aztkg-storage-dir-v1';
+      await idbKeyval.set(key, dirHandle);
+      localStorage.setItem('aztkg.camera.storage.dirHandle', key);
+
+      storageDirHandle = dirHandle;
+      storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
+      storageArmed = storagePermission === 'granted';
+
+      updateStorageUi();
+
+      updateHeartbeat({
+        storageArmed: storageArmed ? '1' : '0',
+        storagePermission: storagePermission
+      });
+
+      if (storageArmed) {
+        setDebug('Storage armed. Future clips will save without prompts.', false);
+      } else {
+        setDebug('Storage selected, but write permission is not granted.', true);
+      }
+
+      return storageArmed;
+    } catch (e) {
+      storageArmed = false;
+      storagePermission = 'prompt';
+      updateStorageUi();
+      setDebug('Storage arm cancelled.', true);
+      return false;
+    }
   }
 
   function buildMetaLines(perf) {
@@ -295,26 +451,29 @@
     return base + '.' + chosenExt;
   }
 
-  async function writeBlobToPickedDirectory(blob, filename) {
-    if (!window.showDirectoryPicker) return false;
+async function writeBlobToPickedDirectory(blob, filename) {
+  if (!storageDirHandle || !storageArmed) return false;
 
-    try {
-      let dirHandle = window.__aztkgDirHandle || null;
+  try {
+    const perm = await verifyDirectoryPermission(storageDirHandle, false);
+    storagePermission = perm;
+    storageArmed = perm === 'granted';
+    updateStorageUi();
 
-      if (!dirHandle) {
-        dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        window.__aztkgDirHandle = dirHandle;
-      }
+    if (!storageArmed) return false;
 
-      const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return true;
-    } catch (e) {
-      return false;
-    }
+    const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return true;
+  } catch (e) {
+    storagePermission = 'prompt';
+    storageArmed = false;
+    updateStorageUi();
+    return false;
   }
+}
 
   function triggerDownload(blob, filename) {
     const a = document.createElement('a');
@@ -396,35 +555,54 @@
 
     setDebug('Camera initialized. Syncing meet state…', false);
 
-    beaconGet({
-      api: 'camera-status',
-      pageOpen: '1',
-      cameraReady: '1',
-      streamReady: '1',
-      recorderState: 'idle',
-      actualMimeType: chosenMime,
-      actualWidth: s.width || 0,
-      actualHeight: s.height || 0,
-      actualFps: s.frameRate || 0,
-      lastError: '',
-      _ts: Date.now()
-    });
+await restoreStorageHandle();
+updateStorageUi();
 
-    updateStopButton(false);
-    await requestWakeLock();
+beaconGet({
+  api: 'camera-status',
+  pageOpen: '1',
+  cameraReady: '1',
+  streamReady: '1',
+  recorderState: 'idle',
+  actualMimeType: chosenMime,
+  actualWidth: s.width || 0,
+  actualHeight: s.height || 0,
+  actualFps: s.frameRate || 0,
+  storageArmed: storageArmed ? '1' : '0',
+  storagePermission: storagePermission,
+  lastError: '',
+  _ts: Date.now()
+});
+
+updateStopButton(false);
+await requestWakeLock();
   }
 
-  function updateHeartbeat(extra) {
-    const params = Object.assign({
-      api: 'camera-status',
-      pageOpen: '1',
-      _ts: Date.now()
-    }, extra || {});
-    beaconGet(params);
-  }
+function updateHeartbeat(extra) {
+  const params = Object.assign({
+    api: 'camera-status',
+    pageOpen: '1',
+    storageArmed: storageArmed ? '1' : '0',
+    storagePermission: storagePermission,
+    _ts: Date.now()
+  }, extra || {});
+  beaconGet(params);
+}
 
   function startRecording(perf, commandSeq) {
     if (!stream) return;
+        if (!storageArmed || !storageDirHandle) {
+      setDebug('Cannot start recording — storage is not armed.', true);
+
+      updateHeartbeat({
+        recorderState: 'error',
+        currentCommandSeq: commandSeq,
+        lastError: 'Storage not armed'
+      });
+
+      lastProcessedCommandSeq = commandSeq;
+      return;
+    }
     if (recorder && recorder.state === 'recording') {
       lastProcessedCommandSeq = commandSeq;
       return;
@@ -618,6 +796,9 @@
     stopRecording(Number(lastProcessedCommandSeq || 0));
   });
 
+    els.btnArmStorage.addEventListener('click', function(){
+    armStorage();
+  });
   els.btnRefreshState.addEventListener('click', function(){
     poll();
   });
