@@ -1,5 +1,5 @@
 (function(){
-  const APPS_SCRIPT_BASE = 'PASTE_YOUR_WEB_APP_EXEC_URL_HERE';
+  const APPS_SCRIPT_BASE = 'https://script.google.com/macros/s/AKfycbxKyrSPRTaQ_QWV2csWPfywQUirH7iizglA4TMpSkAAfP4GaT0x3Pi26NK6nF7kCHSyeg/exec';
   const POLL_MS = 1500;
   const MAX_CLIP_MS = 12 * 60 * 1000;
 
