@@ -241,14 +241,14 @@
       flex:1 1 auto;
       min-height:0;
       overflow:hidden;
-      padding:8px;
+      padding:6px;
       display:grid;
-      grid-template-columns:minmax(320px, 1fr) minmax(380px, 1.2fr);
+      grid-template-columns:minmax(300px, 1fr) minmax(360px, 1.18fr);
       grid-template-areas:
         "focus preview"
         "recent preview";
-      grid-template-rows:1fr auto;
-      gap:8px;
+      grid-template-rows:minmax(0,1fr) auto;
+      gap:6px;
       align-items:stretch;
     }
 
@@ -268,51 +268,52 @@
     }
 
     .card{
-      padding:9px;
+      padding:7px 8px;
       min-height:0;
       overflow:hidden;
     }
 
     .main > .card:nth-child(2){
-      padding:8px 9px;
+      padding:6px 8px;
     }
 
     .seq{
-      font-size:11px;
+      font-size:10px;
+      line-height:1;
     }
 
     .song{
-      margin-top:4px;
-      font-size:18px;
-      line-height:1.02;
+      margin-top:3px;
+      font-size:16px;
+      line-height:1;
     }
 
     .singers{
-      margin-top:5px;
-      font-size:13px;
-      line-height:1.1;
+      margin-top:4px;
+      font-size:12px;
+      line-height:1.05;
     }
 
     .meta{
-      margin-top:5px;
-      gap:2px;
-      font-size:10px;
-      line-height:1.1;
+      margin-top:4px;
+      gap:1px;
+      font-size:9px;
+      line-height:1.05;
     }
 
     .statusWrap{
-      margin-top:7px;
-      gap:6px;
+      margin-top:6px;
+      gap:5px;
     }
 
     .statusPill{
-      min-height:30px;
-      padding:6px 10px;
-      font-size:10px;
+      min-height:28px;
+      padding:5px 8px;
+      font-size:9px;
     }
 
     .elapsed{
-      font-size:16px;
+      font-size:15px;
       line-height:1;
     }
 
@@ -330,33 +331,33 @@
     .previewWrap{
       display:flex;
       flex-direction:column;
-      gap:6px;
+      gap:5px;
       min-height:0;
     }
 
     video{
       width:100%;
-      height:min(46vh, 250px);
-      max-height:min(46vh, 250px);
+      height:min(40vh, 215px);
+      max-height:min(40vh, 215px);
       aspect-ratio:auto;
       object-fit:cover;
       flex:0 0 auto;
     }
 
     .debugLine{
-      font-size:10px;
-      line-height:1.1;
+      font-size:9px;
+      line-height:1.05;
     }
 
     .btnRow{
-      gap:6px;
+      gap:5px;
       flex-wrap:nowrap;
     }
 
     .btn{
-      min-height:34px;
-      padding:0 10px;
-      font-size:10px;
+      min-height:32px;
+      padding:0 9px;
+      font-size:9px;
     }
   }
 </style>
