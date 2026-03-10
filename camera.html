@@ -247,14 +247,16 @@
       grid-template-areas:
         "focus preview"
         "recent preview";
-      grid-template-rows:minmax(0,1fr) auto;
+      grid-template-rows:auto auto;
       gap:6px;
-      align-items:stretch;
+      align-items:start;
+      align-content:start;
     }
 
     .main > .card:nth-child(1){
       grid-area:focus;
       min-height:0;
+      align-self:start;
     }
 
     .main > .card:nth-child(2){
@@ -265,6 +267,8 @@
     .main > .card:nth-child(3){
       grid-area:preview;
       min-height:0;
+      height:100%;
+      align-self:stretch;
     }
 
     .card{
@@ -304,6 +308,7 @@
     .statusWrap{
       margin-top:6px;
       gap:5px;
+      flex-wrap:wrap;
     }
 
     .statusPill{
@@ -331,17 +336,21 @@
     .previewWrap{
       display:flex;
       flex-direction:column;
+      justify-content:flex-start;
       gap:5px;
       min-height:0;
+      height:100%;
+      overflow:hidden;
     }
 
     video{
       width:100%;
-      height:min(40vh, 215px);
-      max-height:min(40vh, 215px);
+      height:auto;
+      max-height:min(38vh, 200px);
       aspect-ratio:auto;
       object-fit:cover;
       flex:0 0 auto;
+      display:block;
     }
 
     .debugLine{
