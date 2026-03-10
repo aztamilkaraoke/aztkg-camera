@@ -354,15 +354,17 @@ if (!audioTracks.length) {
     els.preview.srcObject = stream;
 
     const vt = stream.getVideoTracks()[0];
-    const s = vt && vt.getSettings ? vt.getSettings() : {};
+const s = vt && vt.getSettings ? vt.getSettings() : {};
+const isLandscape = Number(s.width || 0) >= Number(s.height || 0);
 
-    setTop(els.camReady, 'Camera: Ready');
-    setTop(
-      els.quality,
-      'Quality: ' +
-      (s.width || '—') + 'x' + (s.height || '—') +
-      (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
-    );
+setTop(els.camReady, 'Camera: Ready');
+setTop(
+  els.quality,
+  'Quality: ' +
+  (s.width || '—') + 'x' + (s.height || '—') +
+  (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '') +
+  (isLandscape ? ' · LANDSCAPE' : ' · PORTRAIT')
+);
 
     setIdleDebug();
 
