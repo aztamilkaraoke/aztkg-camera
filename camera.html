@@ -243,20 +243,38 @@
       overflow:hidden;
       padding:8px;
       display:grid;
-      grid-template-columns:minmax(250px, .9fr) minmax(250px, .9fr) minmax(320px, 1.15fr);
-      grid-template-areas:"focus recent preview";
+      grid-template-columns:minmax(320px, 1fr) minmax(380px, 1.2fr);
+      grid-template-areas:
+        "focus preview"
+        "recent preview";
+      grid-template-rows:1fr auto;
       gap:8px;
       align-items:stretch;
     }
 
-    .main > .card:nth-child(1){ grid-area:focus; }
-    .main > .card:nth-child(2){ grid-area:recent; }
-    .main > .card:nth-child(3){ grid-area:preview; }
+    .main > .card:nth-child(1){
+      grid-area:focus;
+      min-height:0;
+    }
+
+    .main > .card:nth-child(2){
+      grid-area:recent;
+      align-self:start;
+    }
+
+    .main > .card:nth-child(3){
+      grid-area:preview;
+      min-height:0;
+    }
 
     .card{
       padding:9px;
       min-height:0;
       overflow:hidden;
+    }
+
+    .main > .card:nth-child(2){
+      padding:8px 9px;
     }
 
     .seq{
@@ -300,12 +318,13 @@
 
     .recentTitle{
       font-size:10px;
+      line-height:1;
     }
 
     .recentText{
-      margin-top:5px;
-      font-size:12px;
-      line-height:1.15;
+      margin-top:4px;
+      font-size:11px;
+      line-height:1.1;
     }
 
     .previewWrap{
