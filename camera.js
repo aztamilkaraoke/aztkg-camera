@@ -9,11 +9,13 @@
   let chosenMime = '';
   let chosenExt = 'webm';
   let activePerf = null;
+  let activePerfStartedAtIso = '';
   let lastProcessedCommandSeq = 0;
   let recordingStartedAtMs = 0;
   let inFlight = false;
   let wakeLock = null;
   let jsonpCounter = 0;
+  let lastMode = 'SPLASH';
 
   const els = {
     camReady: document.getElementById('camReady'),
@@ -41,6 +43,16 @@
     if (!els.debugLine) return;
     els.debugLine.textContent = text || '';
     els.debugLine.className = 'debugLine' + (isWarn ? ' warnLine' : '');
+  }
+
+  function setIdleDebug() {
+    if (lastMode === 'ENDED') {
+      setDebug('Meet ended — thanks for singing!', false);
+    } else if (lastMode === 'SPLASH') {
+      setDebug('Waiting for host to start the meet…', false);
+    } else {
+      setDebug('Camera initialized and waiting for host.', false);
+    }
   }
 
   function escapeHtml(s) {
@@ -139,19 +151,46 @@
     return lines;
   }
 
+  function setRecordingUiCompact(isRecording) {
+    const songSize = isRecording ? '24px' : '31px';
+    const singerSize = isRecording ? '16px' : '20px';
+    const metaSize = isRecording ? '12px' : '14px';
+    const statusPad = isRecording ? '8px 12px' : '10px 16px';
+
+    if (els.songName) els.songName.style.fontSize = songSize;
+    if (els.singers) els.singers.style.fontSize = singerSize;
+    if (els.meta) els.meta.style.fontSize = metaSize;
+    if (els.statusPill) els.statusPill.style.padding = statusPad;
+  }
+
+  function updateStopButton(isRecording) {
+    if (!els.btnEmergencyStop) return;
+    els.btnEmergencyStop.disabled = !isRecording;
+    els.btnEmergencyStop.textContent = isRecording ? 'STOP RECORDING' : 'NO ACTIVE RECORDING';
+    els.btnEmergencyStop.style.opacity = isRecording ? '1' : '0.55';
+    els.btnEmergencyStop.style.cursor = isRecording ? 'pointer' : 'not-allowed';
+  }
+
   function applyFocus(perf, mode) {
+    const isRecording = mode === 'recording';
+
     if (!perf) {
-      els.seqNo.textContent = 'SEQ #—';
-      els.songName.textContent = 'Waiting for host…';
-      els.singers.textContent = '—';
+      els.seqNo.textContent = '';
+      els.songName.textContent = lastMode === 'ENDED'
+        ? 'Meet ended — thanks for singing!'
+        : 'Waiting for host to start the meet…';
+      els.singers.textContent = '';
       els.meta.innerHTML = '<div>—</div>';
-      els.statusPill.textContent = 'NOT STARTED';
+      els.statusPill.textContent = lastMode === 'ENDED' ? 'MEET ENDED' : 'NOT STARTED';
       els.statusPill.className = 'statusPill';
       els.elapsed.textContent = '';
+      setRecordingUiCompact(false);
+      updateStopButton(false);
       return;
     }
 
-    els.seqNo.textContent = perf.seqNo ? ('SEQ #' + perf.seqNo) : 'SEQ #—';
+    // Keep seq on screen if you want visual reference, but not in filename
+    els.seqNo.textContent = perf.seqNo ? ('SEQ #' + perf.seqNo) : '';
     els.songName.textContent = perf.songName || '—';
     els.singers.textContent = (perf.singers || []).join(' & ') || '—';
 
@@ -171,6 +210,9 @@
       els.statusPill.className = 'statusPill';
       els.elapsed.textContent = '';
     }
+
+    setRecordingUiCompact(isRecording);
+    updateStopButton(isRecording);
   }
 
   function applyState(st) {
@@ -179,18 +221,33 @@
     const current = display.current || null;
     const upcoming = display.upcoming || null;
     const lastRecorded = display.lastRecorded || null;
+    const mode = (st && st.mode) ? st.mode : 'SPLASH';
+
+    lastMode = mode;
 
     setTop(els.recState, 'Recorder: ' + (cameraStatus.recorderState || '—'));
 
-    const focusMode = current
-      ? (current.status === 'saving' ? 'saving' : 'recording')
-      : 'idle';
+    if (mode === 'SPLASH') {
+      applyFocus(null, 'idle');
+      setIdleDebug();
+    } else if (mode === 'ENDED') {
+      applyFocus(null, 'idle');
+      setIdleDebug();
+    } else {
+      const focusMode = current
+        ? (current.status === 'saving' ? 'saving' : 'recording')
+        : 'idle';
 
-    applyFocus(current || upcoming, focusMode);
+      applyFocus(current || upcoming, focusMode);
+
+      if (!current && !upcoming) {
+        setIdleDebug();
+      }
+    }
 
     if (lastRecorded) {
-      const seq = lastRecorded.seqNo ? ('SEQ #' + lastRecorded.seqNo) : 'SEQ #—';
-      els.recentText.textContent = seq + ' - ' + (lastRecorded.songName || '—');
+      const seq = lastRecorded.seqNo ? ('SEQ #' + lastRecorded.seqNo) : '';
+      els.recentText.textContent = (seq ? seq + ' - ' : '') + (lastRecorded.songName || '—');
     } else {
       els.recentText.textContent = '—';
     }
@@ -198,10 +255,8 @@
 
   function buildFilename(perf) {
     const singerPart = (perf.singers || []).join(' & ');
-    const seqPart = perf.seqNo ? ('SEQ ' + String(perf.seqNo).padStart(3, '0')) : 'SEQ';
 
     const base = [
-      seqPart,
       perf.songName,
       singerPart,
       perf.songType,
@@ -217,6 +272,27 @@
       .trim();
 
     return base + '.' + chosenExt;
+  }
+
+  async function writeBlobToPickedDirectory(blob, filename) {
+    if (!window.showDirectoryPicker) return false;
+
+    try {
+      let dirHandle = window.__aztkgDirHandle || null;
+
+      if (!dirHandle) {
+        dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        window.__aztkgDirHandle = dirHandle;
+      }
+
+      const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   function triggerDownload(blob, filename) {
@@ -246,7 +322,11 @@
 
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        },
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
@@ -259,6 +339,11 @@
         audio: true,
         video: true
       });
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    if (!audioTracks.length) {
+      throw new Error('No audio track available from microphone');
     }
 
     els.preview.srcObject = stream;
@@ -274,7 +359,7 @@
       (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
     );
 
-    setDebug('Camera initialized and waiting for host.');
+    setIdleDebug();
 
     beaconGet({
       api: 'camera-status',
@@ -286,9 +371,11 @@
       actualWidth: s.width || 0,
       actualHeight: s.height || 0,
       actualFps: s.frameRate || 0,
+      lastError: '',
       _ts: Date.now()
     });
 
+    updateStopButton(false);
     await requestWakeLock();
   }
 
@@ -310,7 +397,10 @@
 
     chunks = [];
     activePerf = perf;
-    recordingStartedAtMs = Date.now();
+    activePerfStartedAtIso = perf && perf.startedAt ? perf.startedAt : '';
+    recordingStartedAtMs = activePerfStartedAtIso
+      ? new Date(activePerfStartedAtIso).getTime()
+      : Date.now();
 
     const options = chosenMime ? {
       mimeType: chosenMime,
@@ -332,13 +422,17 @@
       });
     };
 
-    recorder.onstop = function() {
+    recorder.onstop = async function() {
       try {
         const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
         const filename = buildFilename(activePerf);
 
-        setDebug('Saving clip...');
-        triggerDownload(blob, filename);
+        setDebug('Saving clip...', false);
+
+        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+        if (!wroteDirect) {
+          triggerDownload(blob, filename);
+        }
 
         beaconGet({
           api: 'camera-clip-saved',
@@ -352,7 +446,8 @@
         updateHeartbeat({
           recorderState: 'idle',
           currentPerformanceId: '',
-          lastSavedFilename: filename
+          lastSavedFilename: filename,
+          lastError: ''
         });
 
       } catch (err) {
@@ -363,9 +458,12 @@
         });
       } finally {
         activePerf = null;
+        activePerfStartedAtIso = '';
         chunks = [];
         recordingStartedAtMs = 0;
         els.elapsed.textContent = '';
+        updateStopButton(false);
+        setIdleDebug();
       }
     };
 
@@ -376,15 +474,18 @@
       recorderState: 'recording',
       currentCommandSeq: commandSeq,
       currentPerformanceId: perf.performanceId || '',
-      recordingStartedAt: new Date().toISOString()
+      recordingStartedAt: perf.startedAt || new Date().toISOString(),
+      lastError: ''
     });
 
-    setDebug('Recording in progress...');
+    setDebug('Recording in progress...', false);
+    updateStopButton(true);
   }
 
   function stopRecording(commandSeq) {
     if (!recorder || recorder.state !== 'recording') {
       lastProcessedCommandSeq = commandSeq;
+      updateStopButton(false);
       return;
     }
 
@@ -395,14 +496,15 @@
       currentCommandSeq: commandSeq
     });
 
-    setDebug('Stopping recorder...');
+    setDebug('Stopping recorder...', false);
     recorder.stop();
+    updateStopButton(false);
   }
 
   function tick() {
     if (recorder && recorder.state === 'recording' && recordingStartedAtMs) {
       const ms = Date.now() - recordingStartedAtMs;
-      const totalSec = Math.floor(ms / 1000);
+      const totalSec = Math.floor(Math.max(0, ms) / 1000);
       const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
       const ss = String(totalSec % 60).padStart(2, '0');
       els.elapsed.textContent = mm + ':' + ss;
