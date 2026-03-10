@@ -485,7 +485,7 @@
           lastError: ''
         });
 
-          } catch (err) {
+      } catch (err) {
         const msg = String(err && err.message || err || 'Clip save failed');
 
         setDebug('Clip save failed — fallback download may be needed.', true);
@@ -496,13 +496,13 @@
           lastError: msg
         });
       } finally {
+        recorder = null;
         activePerf = null;
         activePerfStartedAtIso = '';
         chunks = [];
         recordingStartedAtMs = 0;
         els.elapsed.textContent = '';
         updateStopButton(false);
-        recorder = null;
         setIdleDebug();
       }
     };
