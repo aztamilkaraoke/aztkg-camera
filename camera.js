@@ -55,7 +55,7 @@
     } else if (lastMode === 'SPLASH') {
       setDebug('Waiting for host to start the meet…', false);
     } else {
-      setDebug('Camera initialized and waiting for host.', false);
+      setDebug('Meet is live — waiting for next song…', false);
     }
   }
 
