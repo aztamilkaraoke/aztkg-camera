@@ -254,11 +254,18 @@
 
       applyFocus(current || upcoming, focusMode);
 
-      if (!current && !upcoming) {
+      if (current) {
+        if (current.status === 'saving') {
+          setDebug('Saving clip…', false);
+        } else {
+          setDebug('Recording in progress…', false);
+        }
+      } else if (upcoming) {
+        setDebug('Meet is live — next song is loaded.', false);
+      } else {
         setIdleDebug();
       }
     }
-
     if (lastRecorded) {
       const seq = lastRecorded.seqNo ? ('SEQ #' + lastRecorded.seqNo) : '';
       els.recentText.textContent = (seq ? seq + ' - ' : '') + (lastRecorded.songName || '—');
