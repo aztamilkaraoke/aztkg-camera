@@ -184,26 +184,26 @@
     }
   };
 
-    function updateStorageUi() {
-    if (!els.storageState) return;
+function updateStorageUi() {
+  if (!els.storageState) return;
 
-    if (!window.showDirectoryPicker) {
-      setTop(els.storageState, 'Storage: Unsupported');
-      return;
-    }
-
-    if (storageArmed && storagePermission === 'granted') {
-      setTop(els.storageState, 'Storage: Ready');
-      return;
-    }
-
-    if (storageArmed) {
-      setTop(els.storageState, 'Storage: Re-arm needed');
-      return;
-    }
-
-    setTop(els.storageState, 'Storage: Not armed');
+  if (!window.showDirectoryPicker) {
+    setTop(els.storageState, 'Storage: Unsupported');
+    return;
   }
+
+  if (storageArmed && storagePermission === 'granted') {
+    setTop(els.storageState, 'Storage: Ready');
+    return;
+  }
+
+  if (storageDirHandle) {
+    setTop(els.storageState, 'Storage: Re-arm needed');
+    return;
+  }
+
+  setTop(els.storageState, 'Storage: Not armed');
+}
 
   async function verifyDirectoryPermission(dirHandle, ask) {
     if (!dirHandle) return 'prompt';
@@ -250,7 +250,7 @@
 
       storageDirHandle = handle;
       storagePermission = await verifyDirectoryPermission(storageDirHandle, false);
-      storageArmed = storagePermission === 'granted';
+      storageArmed = !!storageDirHandle;
       updateStorageUi();
       return storageArmed;
     } catch (e) {
@@ -277,7 +277,7 @@
 
       storageDirHandle = dirHandle;
       storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
-      storageArmed = storagePermission === 'granted';
+      storageArmed = !!storageDirHandle;
 
       updateStorageUi();
 
@@ -286,10 +286,10 @@
         storagePermission: storagePermission
       });
 
-      if (storageArmed) {
+      if (storagePermission === 'granted') {
         setDebug('Storage armed. Future clips will save without prompts.', false);
       } else {
-        setDebug('Storage selected, but write permission is not granted.', true);
+        setDebug('Storage selected. Re-arm may still be needed before silent saves work.', true);
       }
 
       return storageArmed;
@@ -452,25 +452,26 @@
   }
 
 async function writeBlobToPickedDirectory(blob, filename) {
-  if (!storageDirHandle || !storageArmed) return false;
+  if (!storageDirHandle) return false;
 
   try {
-    const perm = await verifyDirectoryPermission(storageDirHandle, false);
-    storagePermission = perm;
-    storageArmed = perm === 'granted';
-    updateStorageUi();
-
-    if (!storageArmed) return false;
-
     const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
+
+    storagePermission = 'granted';
+    storageArmed = true;
+    updateStorageUi();
     return true;
   } catch (e) {
+    console.error('Direct save failed:', e);
+
     storagePermission = 'prompt';
     storageArmed = false;
     updateStorageUi();
+    console.error('Direct save failed:', e);
+    setDebug('Direct save failed: ' + (e && e.name ? e.name : 'unknown error'), true);
     return false;
   }
 }
@@ -590,19 +591,19 @@ function updateHeartbeat(extra) {
 }
 
   function startRecording(perf, commandSeq) {
-    if (!stream) return;
-        if (!storageArmed || !storageDirHandle) {
-      setDebug('Cannot start recording — storage is not armed.', true);
+if (!stream) return;
+if (!storageDirHandle) {
+  setDebug('Cannot start recording — storage is not armed.', true);
 
-      updateHeartbeat({
-        recorderState: 'error',
-        currentCommandSeq: commandSeq,
-        lastError: 'Storage not armed'
-      });
+  updateHeartbeat({
+    recorderState: 'error',
+    currentCommandSeq: commandSeq,
+    lastError: 'Storage not armed'
+  });
 
-      lastProcessedCommandSeq = commandSeq;
-      return;
-    }
+  lastProcessedCommandSeq = commandSeq;
+  return;
+}
     if (recorder && recorder.state === 'recording') {
       lastProcessedCommandSeq = commandSeq;
       return;
