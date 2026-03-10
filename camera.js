@@ -1,6 +1,7 @@
 (function(){
   const APPS_SCRIPT_BASE = 'https://script.google.com/macros/s/AKfycbxKyrSPRTaQ_QWV2csWPfywQUirH7iizglA4TMpSkAAfP4GaT0x3Pi26NK6nF7kCHSyeg/exec';
-  const POLL_MS = 1500;
+  const FAST_POLL_MS = 1500;
+  const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
 
   let stream = null;
@@ -127,12 +128,12 @@
       script.src = fullUrl;
       document.body.appendChild(script);
 
-      setTimeout(function() {
+          setTimeout(function() {
         if (done) return;
         done = true;
         cleanup();
         reject(new Error('JSONP timeout'));
-      }, 10000);
+      }, 20000);
     });
   }
 
@@ -222,6 +223,8 @@
     const upcoming = display.upcoming || null;
     const lastRecorded = display.lastRecorded || null;
     const mode = (st && st.mode) ? st.mode : 'SPLASH';
+    const isActive = !!current || mode === 'LIVE';
+    restartPollLoop(isActive);
 
     lastMode = mode;
 
@@ -452,9 +455,14 @@
 
     } catch (err) {
       const msg = String(err && err.message || err || 'Polling failed');
+      pollFailCount++;
+
       setTop(els.netState, 'Network: Offline');
-      setDebug('Polling failed: ' + msg, true);
-      console.log('Polling error:', msg);
+
+      if (pollFailCount >= 3) {
+        setDebug('Waiting for backend…', true);
+      }
+
       updateHeartbeat({
         lastError: msg
       });
@@ -532,13 +540,19 @@
     }
   }
 
+    function restartPollLoop(isActive) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(poll, isActive ? FAST_POLL_MS : IDLE_POLL_MS);
+  }
+
   async function poll() {
     if (inFlight) return;
     inFlight = true;
     setTop(els.netState, 'Network: Syncing');
 
     try {
-      const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
+            const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
+      pollFailCount = 0;
       setTop(els.netState, 'Network: Online');
       applyState(st);
       handleCommand(st);
@@ -567,7 +581,7 @@
   initMedia()
     .then(function(){
       poll();
-      setInterval(poll, POLL_MS);
+      restartPollLoop(false);
       setInterval(tick, 1000);
     })
     .catch(function(err){
