@@ -350,7 +350,7 @@
     console.log('Audio tracks:', stream.getAudioTracks().length);
     const vt = stream.getVideoTracks()[0];
     const s = vt && vt.getSettings ? vt.getSettings() : {};
-
+    console.log('Video settings:', s);
     setTop(els.camReady, 'Camera: Ready');
     setTop(
       els.quality,
