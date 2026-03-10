@@ -346,6 +346,11 @@
       throw new Error('No audio track available from microphone');
     }
 
+    const audioTracks = stream.getAudioTracks();
+if (!audioTracks.length) {
+  throw new Error('No audio track available from microphone');
+}
+
     els.preview.srcObject = stream;
 
     const vt = stream.getVideoTracks()[0];
