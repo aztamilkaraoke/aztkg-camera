@@ -322,7 +322,11 @@
 
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        },
         video: {
           facingMode: { ideal: 'environment' },
           width: { ideal: 1920 },
@@ -338,7 +342,7 @@
     }
 
     const audioTracks = stream.getAudioTracks();
-    if (!audioTracks || !audioTracks.length) {
+    if (!audioTracks.length) {
       throw new Error('No audio track available from microphone');
     }
 
@@ -346,15 +350,13 @@
 
     const vt = stream.getVideoTracks()[0];
     const s = vt && vt.getSettings ? vt.getSettings() : {};
-    const isLandscape = Number(s.width || 0) >= Number(s.height || 0);
 
     setTop(els.camReady, 'Camera: Ready');
     setTop(
       els.quality,
       'Quality: ' +
       (s.width || '—') + 'x' + (s.height || '—') +
-      (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '') +
-      (isLandscape ? ' · LANDSCAPE' : ' · PORTRAIT')
+      (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
     );
 
     setIdleDebug();
