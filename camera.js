@@ -17,6 +17,9 @@
   let wakeLock = null;
   let jsonpCounter = 0;
   let lastMode = 'SPLASH';
+  let pollTimer = null;
+  let pollFailCount = 0;
+  let currentPollMs = 0;
 
   const els = {
     camReady: document.getElementById('camReady'),
@@ -312,6 +315,23 @@
     }, 2000);
   }
 
+    function validateAudioTrackOrThrow(s) {
+    const tracks = s ? s.getAudioTracks() : [];
+    if (!tracks.length) {
+      throw new Error('No audio track available from microphone');
+    }
+
+    const liveTrack = tracks.find(function(t) {
+      return t && t.enabled !== false && t.readyState === 'live';
+    });
+
+    if (!liveTrack) {
+      throw new Error('Microphone track is not live');
+    }
+
+    return liveTrack;
+  }
+
   async function initMedia() {
     chooseMime();
 
@@ -344,10 +364,7 @@
       });
     }
 
-    const audioTracks = stream.getAudioTracks();
-    if (!audioTracks.length) {
-      throw new Error('No audio track available from microphone');
-    }
+    validateAudioTrackOrThrow(stream);
 
     els.preview.srcObject = stream;
     console.log('Audio tracks:', stream.getAudioTracks().length);
@@ -430,7 +447,7 @@
         const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
         const filename = buildFilename(activePerf);
 
-        setDebug('Saving clip...', false);
+        setDebug('Saving clip…', false);
 
         const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
@@ -453,26 +470,24 @@
           lastError: ''
         });
 
-    } catch (err) {
-      const msg = String(err && err.message || err || 'Polling failed');
-      pollFailCount++;
+          } catch (err) {
+        const msg = String(err && err.message || err || 'Clip save failed');
 
-      setTop(els.netState, 'Network: Offline');
+        setDebug('Clip save failed — fallback download may be needed.', true);
 
-      if (pollFailCount >= 3) {
-        setDebug('Waiting for backend…', true);
-      }
-
-      updateHeartbeat({
-        lastError: msg
-      });
-    } finally {
+        updateHeartbeat({
+          recorderState: 'error',
+          currentPerformanceId: '',
+          lastError: msg
+        });
+      } finally {
         activePerf = null;
         activePerfStartedAtIso = '';
         chunks = [];
         recordingStartedAtMs = 0;
         els.elapsed.textContent = '';
         updateStopButton(false);
+        recorder = null;
         setIdleDebug();
       }
     };
@@ -540,9 +555,13 @@
     }
   }
 
-    function restartPollLoop(isActive) {
+  function restartPollLoop(isActive) {
+    const nextMs = isActive ? FAST_POLL_MS : IDLE_POLL_MS;
+    if (pollTimer && currentPollMs === nextMs) return;
+
     if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(poll, isActive ? FAST_POLL_MS : IDLE_POLL_MS);
+    currentPollMs = nextMs;
+    pollTimer = setInterval(poll, nextMs);
   }
 
   async function poll() {
@@ -569,9 +588,10 @@
   }
 
   els.btnEmergencyStop.addEventListener('click', function(){
-    if (recorder && recorder.state === 'recording') {
-      stopRecording(lastProcessedCommandSeq);
-    }
+    if (!(recorder && recorder.state === 'recording')) return;
+
+    setDebug('Manual stop requested…', false);
+    stopRecording(Number(lastProcessedCommandSeq || 0));
   });
 
   els.btnRefreshState.addEventListener('click', function(){
