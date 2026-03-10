@@ -387,7 +387,7 @@
       (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
     );
 
-    setIdleDebug();
+    setDebug('Camera initialized. Syncing meet state…', false);
 
     beaconGet({
       api: 'camera-status',
