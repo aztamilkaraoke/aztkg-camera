@@ -192,7 +192,7 @@ function updateStorageUi() {
     return;
   }
 
-  if (storageArmed && storagePermission === 'granted') {
+  if (storageDirHandle && storagePermission === 'granted') {
     setTop(els.storageState, 'Storage: Ready');
     return;
   }
@@ -466,12 +466,11 @@ async function writeBlobToPickedDirectory(blob, filename) {
     return true;
   } catch (e) {
     console.error('Direct save failed:', e);
+    setDebug('Direct save failed: ' + (e && e.name ? e.name : 'unknown error'), true);
 
     storagePermission = 'prompt';
     storageArmed = false;
     updateStorageUi();
-    console.error('Direct save failed:', e);
-    setDebug('Direct save failed: ' + (e && e.name ? e.name : 'unknown error'), true);
     return false;
   }
 }
