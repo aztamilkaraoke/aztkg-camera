@@ -220,6 +220,83 @@
     color:#fff;
     border:1px solid var(--line);
   }
+    @media (orientation: landscape) {
+    .topbar{
+      padding:6px 10px;
+      gap:5px;
+    }
+
+    .topPill{
+      font-size:9px;
+      padding:5px 8px;
+    }
+
+    .main{
+      display:grid;
+      grid-template-columns:minmax(280px, 1fr) minmax(360px, 1.2fr);
+      grid-template-areas:
+        "focus preview"
+        "recent preview";
+      align-items:start;
+      gap:10px;
+      padding:10px;
+    }
+
+    .main > .card:nth-child(1){ grid-area:focus; }
+    .main > .card:nth-child(2){ grid-area:recent; }
+    .main > .card:nth-child(3){ grid-area:preview; }
+
+    .card{
+      padding:10px;
+    }
+
+    .song{
+      font-size:20px;
+      line-height:1.04;
+    }
+
+    .singers{
+      font-size:14px;
+      margin-top:6px;
+    }
+
+    .meta{
+      font-size:11px;
+      gap:3px;
+      margin-top:6px;
+    }
+
+    .statusPill{
+      min-height:32px;
+      font-size:11px;
+      padding:7px 10px;
+    }
+
+    .elapsed{
+      font-size:18px;
+    }
+
+    .previewWrap{
+      height:100%;
+    }
+
+    video{
+      max-height:none;
+      height:min(68vh, 420px);
+      width:100%;
+      object-fit:cover;
+    }
+
+    .debugLine{
+      font-size:10px;
+    }
+
+    .btn{
+      min-height:36px;
+      font-size:11px;
+      padding:0 10px;
+    }
+  }
 </style>
 </head>
 <body>
