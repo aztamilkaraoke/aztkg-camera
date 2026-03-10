@@ -243,14 +243,9 @@
       overflow:hidden;
       padding:6px;
       display:grid;
-      grid-template-columns:minmax(320px, 1.05fr) minmax(360px, 1.15fr);
-      grid-template-areas:
-        "focus preview"
-        "recent preview";
-      grid-template-rows:auto auto;
+      grid-template-columns:minmax(320px, 1.02fr) minmax(360px, 1.12fr);
       gap:6px;
-      align-items:start;
-      align-content:start;
+      align-items:stretch;
     }
 
     .main > .card:nth-child(1){
@@ -270,6 +265,22 @@
       min-height:0;
       height:100%;
       align-self:stretch;
+    }
+
+    .leftCol{
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    .leftCol > .card:first-child{
+      flex:1 1 auto;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      padding:8px 9px;
     }
 
     .card{
@@ -301,9 +312,9 @@
 
     .meta{
       margin-top:4px;
-      gap:1px;
+      gap:2px;
       font-size:9px;
-      line-height:1.05;
+      line-height:1.08;
     }
 
     .statusWrap{
@@ -323,6 +334,11 @@
       line-height:1;
     }
 
+    .recentCard{
+      flex:0 0 auto;
+      padding:6px 8px;
+    }
+    
     .recentTitle{
       font-size:10px;
       line-height:1;
@@ -335,23 +351,24 @@
     }
 
     .previewWrap{
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      gap:5px;
-      min-height:100%;
+      min-height:0;
       height:100%;
+      display:grid;
+      grid-template-rows:minmax(0, 1fr) auto auto;
+      gap:5px;
+      padding:8px 9px;
       overflow:hidden;
     }
 
     video{
       width:100%;
-      height:auto;
-      max-height:min(41vh, 220px);
-      aspect-ratio:auto;
-      object-fit:cover;
-      flex:0 0 auto;
+      height:100%;
+      min-height:0;
+      max-height:none;
+      border-radius:16px;
+      background:#000;
       display:block;
+      object-fit:cover;
     }
 
     .debugLine{
@@ -382,20 +399,22 @@
     </div>
 
     <div class="main">
-      <div class="card">
-        <div class="seq" id="seqNo">SEQ #—</div>
-        <div class="song" id="songName">Waiting for host…</div>
-        <div class="singers" id="singers">—</div>
-        <div class="meta" id="meta"><div>—</div></div>
-        <div class="statusWrap">
-          <div class="statusPill" id="statusPill">NOT STARTED</div>
-          <div class="elapsed" id="elapsed"></div>
+      <div class="leftCol">
+        <div class="card">
+          <div class="seq" id="seqNo">SEQ #—</div>
+          <div class="song" id="songName">Waiting for host…</div>
+          <div class="singers" id="singers">—</div>
+          <div class="meta" id="meta"><div>—</div></div>
+          <div class="statusWrap">
+            <div class="statusPill" id="statusPill">NOT STARTED</div>
+            <div class="elapsed" id="elapsed"></div>
+          </div>
         </div>
-      </div>
 
-      <div class="card">
-        <div class="recentTitle">Recently recorded</div>
-        <div class="recentText" id="recentText">—</div>
+        <div class="card recentCard">
+          <div class="recentTitle">Recently recorded</div>
+          <div class="recentText" id="recentText">—</div>
+        </div>
       </div>
 
       <div class="card previewWrap">
