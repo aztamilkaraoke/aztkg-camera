@@ -450,13 +450,15 @@
           lastError: ''
         });
 
-      } catch (err) {
-        setDebug('Save failed: ' + String(err && err.message || err), true);
-        updateHeartbeat({
-          recorderState: 'error',
-          lastError: String(err && err.message || err)
-        });
-      } finally {
+    } catch (err) {
+      const msg = String(err && err.message || err || 'Polling failed');
+      setTop(els.netState, 'Network: Offline');
+      setDebug('Polling failed: ' + msg, true);
+      console.log('Polling error:', msg);
+      updateHeartbeat({
+        lastError: msg
+      });
+    } finally {
         activePerf = null;
         activePerfStartedAtIso = '';
         chunks = [];
