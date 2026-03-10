@@ -346,25 +346,18 @@
       throw new Error('No audio track available from microphone');
     }
 
-    const audioTracks = stream.getAudioTracks();
-if (!audioTracks.length) {
-  throw new Error('No audio track available from microphone');
-}
-
     els.preview.srcObject = stream;
 
     const vt = stream.getVideoTracks()[0];
-const s = vt && vt.getSettings ? vt.getSettings() : {};
-const isLandscape = Number(s.width || 0) >= Number(s.height || 0);
+    const s = vt && vt.getSettings ? vt.getSettings() : {};
 
-setTop(els.camReady, 'Camera: Ready');
-setTop(
-  els.quality,
-  'Quality: ' +
-  (s.width || '—') + 'x' + (s.height || '—') +
-  (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '') +
-  (isLandscape ? ' · LANDSCAPE' : ' · PORTRAIT')
-);
+    setTop(els.camReady, 'Camera: Ready');
+    setTop(
+      els.quality,
+      'Quality: ' +
+      (s.width || '—') + 'x' + (s.height || '—') +
+      (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
+    );
 
     setIdleDebug();
 
