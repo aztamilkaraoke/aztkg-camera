@@ -23,8 +23,6 @@
   let storageDirHandle = null;
   let storageArmed = false;
   let storagePermission = 'prompt';
-  let opfsRootHandle = null;
-  const OPFS_CLIPS_DIR = 'clips';
 
   const els = {
     camReady: document.getElementById('camReady'),
@@ -186,15 +184,25 @@
     }
   };
 
-  function updateStorageUi() {
+    function updateStorageUi() {
     if (!els.storageState) return;
 
-    if (navigator.storage && navigator.storage.getDirectory) {
-      setTop(els.storageState, 'Storage: Internal Ready');
+    if (!window.showDirectoryPicker) {
+      setTop(els.storageState, 'Storage: Unsupported');
       return;
     }
 
-    setTop(els.storageState, 'Storage: Unsupported');
+    if (storageArmed && storagePermission === 'granted') {
+      setTop(els.storageState, 'Storage: Ready');
+      return;
+    }
+
+    if (storageArmed) {
+      setTop(els.storageState, 'Storage: Re-arm needed');
+      return;
+    }
+
+    setTop(els.storageState, 'Storage: Not armed');
   }
 
   async function verifyDirectoryPermission(dirHandle, ask) {
@@ -255,9 +263,43 @@
   }
 
   async function armStorage() {
-    updateStorageUi();
-    setDebug('Using internal storage. Folder arm is not required.', false);
-    return true;
+    if (!window.showDirectoryPicker) {
+      setDebug('This browser does not support folder-based silent saves.', true);
+      updateStorageUi();
+      return false;
+    }
+
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const key = 'aztkg-storage-dir-v1';
+      await idbKeyval.set(key, dirHandle);
+      localStorage.setItem('aztkg.camera.storage.dirHandle', key);
+
+      storageDirHandle = dirHandle;
+      storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
+      storageArmed = storagePermission === 'granted';
+
+      updateStorageUi();
+
+      updateHeartbeat({
+        storageArmed: storageArmed ? '1' : '0',
+        storagePermission: storagePermission
+      });
+
+      if (storageArmed) {
+        setDebug('Storage armed. Future clips will save without prompts.', false);
+      } else {
+        setDebug('Storage selected, but write permission is not granted.', true);
+      }
+
+      return storageArmed;
+    } catch (e) {
+      storageArmed = false;
+      storagePermission = 'prompt';
+      updateStorageUi();
+      setDebug('Storage arm cancelled.', true);
+      return false;
+    }
   }
 
   function buildMetaLines(perf) {
@@ -409,64 +451,28 @@
     return base + '.' + chosenExt;
   }
 
-    async function getOpfsClipsDir() {
-    if (!navigator.storage || !navigator.storage.getDirectory) {
-      throw new Error('OPFS is not supported in this browser');
-    }
-
-    if (!opfsRootHandle) {
-      opfsRootHandle = await navigator.storage.getDirectory();
-    }
-
-    return await opfsRootHandle.getDirectoryHandle(OPFS_CLIPS_DIR, { create: true });
-  }
-
-  function buildUniqueFilename(perf) {
-    const singerPart = (perf.singers || []).join(' & ');
-
-    const base = [
-      perf.songName,
-      singerPart,
-      perf.songType,
-      perf.meetName,
-      perf.movieName,
-      perf.composerName
-    ]
-      .filter(Boolean)
-      .join(' - ')
-      .replace(/[\/\\:*?"<>|]/g, '-')
-      .replace(/\s+/g, ' ')
-      .replace(/\.+$/g, '')
-      .trim() || 'AZTKG Recording';
-
-    const ts = new Date().toISOString()
-      .replace(/[:.]/g, '-')
-      .replace('T', ' ')
-      .replace('Z', ' UTC');
-
-    return base + ' - ' + ts + '.' + chosenExt;
-  }
-
-  async function writeBlobToOpfs(blob, filename) {
-    const clipsDir = await getOpfsClipsDir();
-    const fileHandle = await clipsDir.getFileHandle(filename, { create: true });
-    const writable = await fileHandle.createWritable();
-
-    try {
-      await writable.write(blob);
-      await writable.close();
-      return { ok: true, filename: filename };
-    } catch (e) {
-      try { await writable.abort(); } catch (_) {}
-      return {
-        ok: false,
-        error: String(e && (e.message || e.name) || e || 'OPFS write failed')
-      };
-    }
-  }
-
 async function writeBlobToPickedDirectory(blob, filename) {
-  return await writeBlobToOpfs(blob, filename);
+  if (!storageDirHandle || !storageArmed) return false;
+
+  try {
+    const perm = await verifyDirectoryPermission(storageDirHandle, false);
+    storagePermission = perm;
+    storageArmed = perm === 'granted';
+    updateStorageUi();
+
+    if (!storageArmed) return false;
+
+    const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return true;
+  } catch (e) {
+    storagePermission = 'prompt';
+    storageArmed = false;
+    updateStorageUi();
+    return false;
+  }
 }
 
   function triggerDownload(blob, filename) {
@@ -585,6 +591,18 @@ function updateHeartbeat(extra) {
 
   function startRecording(perf, commandSeq) {
     if (!stream) return;
+        if (!storageArmed || !storageDirHandle) {
+      setDebug('Cannot start recording — storage is not armed.', true);
+
+      updateHeartbeat({
+        recorderState: 'error',
+        currentCommandSeq: commandSeq,
+        lastError: 'Storage not armed'
+      });
+
+      lastProcessedCommandSeq = commandSeq;
+      return;
+    }
     if (recorder && recorder.state === 'recording') {
       lastProcessedCommandSeq = commandSeq;
       return;
@@ -619,17 +637,14 @@ function updateHeartbeat(extra) {
 
     recorder.onstop = async function() {
       try {
-                const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
-        const filename = buildUniqueFilename(activePerf);
+        const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
+        const filename = buildFilename(activePerf);
 
         setDebug('Saving clip…', false);
 
-        const saveResult = await writeBlobToPickedDirectory(blob, filename);
-        if (!saveResult.ok) {
-          setDebug('OPFS save failed: ' + (saveResult.error || 'Unknown error'), true);
+        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+        if (!wroteDirect) {
           triggerDownload(blob, filename);
-        } else {
-          setDebug('Clip saved to internal storage.', false);
         }
 
         beaconGet({
