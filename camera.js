@@ -219,17 +219,17 @@
     return lines;
   }
 
-function setRecordingUiCompact(isRecording) {
-  const songSize = isRecording ? '20px' : '26px';
-  const singerSize = isRecording ? '14px' : '17px';
-  const metaSize = isRecording ? '0px' : '0px';
-  const statusPad = isRecording ? '8px 12px' : '9px 13px';
+  function setRecordingUiCompact(isRecording) {
+    const songSize = isRecording ? '24px' : '31px';
+    const singerSize = isRecording ? '16px' : '20px';
+    const metaSize = isRecording ? '12px' : '14px';
+    const statusPad = isRecording ? '8px 12px' : '10px 16px';
 
-  if (els.songName) els.songName.style.fontSize = songSize;
-  if (els.singers) els.singers.style.fontSize = singerSize;
-  if (els.meta) els.meta.style.fontSize = metaSize;
-  if (els.statusPill) els.statusPill.style.padding = statusPad;
-}
+    if (els.songName) els.songName.style.fontSize = songSize;
+    if (els.singers) els.singers.style.fontSize = singerSize;
+    if (els.meta) els.meta.style.fontSize = metaSize;
+    if (els.statusPill) els.statusPill.style.padding = statusPad;
+  }
 
   function updateStopButton(isRecording) {
     if (!els.btnEmergencyStop) return;
@@ -239,58 +239,57 @@ function setRecordingUiCompact(isRecording) {
     els.btnEmergencyStop.style.cursor = isRecording ? 'pointer' : 'not-allowed';
   }
 
-function applyFocus(perf, mode) {
-  const isRecording = mode === 'recording';
+  function applyFocus(perf, mode) {
+    const isRecording = mode === 'recording';
 
-  if (!perf) {
-    els.seqNo.textContent = '';
+    if (!perf) {
+      els.seqNo.textContent = '';
 
-    if (lastMode === 'ENDED') {
-      els.songName.textContent = 'Meet ended — thanks for singing!';
-      els.statusPill.textContent = 'MEET ENDED';
-    } else if (lastMode === 'SPLASH') {
-      els.songName.textContent = 'Waiting for host to start the meet…';
-      els.statusPill.textContent = 'NOT STARTED';
-    } else {
-      els.songName.textContent = 'Meet is live — waiting for next song…';
-      els.statusPill.textContent = 'WAITING';
+      if (lastMode === 'ENDED') {
+        els.songName.textContent = 'Meet ended — thanks for singing!';
+        els.statusPill.textContent = 'MEET ENDED';
+      } else if (lastMode === 'SPLASH') {
+        els.songName.textContent = 'Waiting for host to start the meet…';
+        els.statusPill.textContent = 'NOT STARTED';
+      } else {
+        els.songName.textContent = 'Meet is live — waiting for next song…';
+        els.statusPill.textContent = 'WAITING';
+      }
+
+      els.singers.textContent = '';
+      els.meta.innerHTML = '<div>—</div>';
+      els.statusPill.className = 'statusPill';
+      els.elapsed.textContent = '';
+      setRecordingUiCompact(false);
+      updateStopButton(false);
+      return;
     }
 
-    els.singers.textContent = '';
-    els.meta.innerHTML = '';
-    els.statusPill.className = 'statusPill';
-    els.elapsed.textContent = '';
-    setRecordingUiCompact(false);
-    updateStopButton(false);
-    return;
+    // Keep seq on screen if you want visual reference, but not in filename
+    els.seqNo.textContent = perf.seqNo ? ('SEQ #' + perf.seqNo) : '';
+    els.songName.textContent = perf.songName || '—';
+    els.singers.textContent = (perf.singers || []).join(' & ') || '—';
+
+    const metaLines = buildMetaLines(perf);
+    els.meta.innerHTML = metaLines.length
+      ? metaLines.map(x => '<div>' + escapeHtml(x) + '</div>').join('')
+      : '<div>—</div>';
+
+    if (mode === 'recording') {
+      els.statusPill.textContent = 'RECORDING IN PROGRESS';
+      els.statusPill.className = 'statusPill recording';
+    } else if (mode === 'saving') {
+      els.statusPill.textContent = 'SAVING';
+      els.statusPill.className = 'statusPill saving';
+    } else {
+      els.statusPill.textContent = 'NOT STARTED';
+      els.statusPill.className = 'statusPill';
+      els.elapsed.textContent = '';
+    }
+
+    setRecordingUiCompact(isRecording);
+    updateStopButton(isRecording);
   }
-
-  const headerBits = [];
-  if (perf.seqNo) headerBits.push('SEQ #' + perf.seqNo);
-  if (perf.meetName) headerBits.push(perf.meetName);
-
-  els.seqNo.textContent = headerBits.join(' · ');
-  els.songName.textContent = perf.songName || '—';
-  els.singers.textContent = (perf.singers || []).join(' & ') || '—';
-
-  // keep camera console clean; no separate Duet/Solo or extra meta lines
-  els.meta.innerHTML = '';
-
-  if (mode === 'recording') {
-    els.statusPill.textContent = 'RECORDING IN PROGRESS';
-    els.statusPill.className = 'statusPill recording';
-  } else if (mode === 'saving') {
-    els.statusPill.textContent = 'SAVING';
-    els.statusPill.className = 'statusPill saving';
-  } else {
-    els.statusPill.textContent = 'NOT STARTED';
-    els.statusPill.className = 'statusPill';
-    els.elapsed.textContent = '';
-  }
-
-  setRecordingUiCompact(isRecording);
-  updateStopButton(isRecording);
-}
 
   function applyState(st) {
     const display = st && st.performanceDisplay ? st.performanceDisplay : {};
@@ -493,11 +492,7 @@ function renderClipPanel() {
   if (!els.recentText) return;
 
   if (!opfsClipIndex.length) {
-    els.recentText.innerHTML =
-      '<details>' +
-        '<summary style="cursor:pointer;color:#cbd5e1;font-weight:800">0 clips saved internally</summary>' +
-        '<div style="margin-top:8px;color:#94a3b8;font-size:12px">No clips saved yet</div>' +
-      '</details>';
+    els.recentText.innerHTML = 'No clips saved yet';
     return;
   }
 
@@ -512,23 +507,20 @@ function renderClipPanel() {
   const first = opfsClipIndex[0];
 
   els.recentText.innerHTML =
-    '<details>' +
-      '<summary style="cursor:pointer;color:#cbd5e1;font-weight:800">' +
-        opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
-      '</summary>' +
-      '<div style="margin-top:8px">' +
-        '<select id="clipPicker" ' +
-          'style="width:100%;padding:10px 12px;border-radius:10px;background:#111827;color:#f8fafc;border:1px solid rgba(255,255,255,.12);font-weight:700">' +
-          options +
-        '</select>' +
-        '<div id="clipPickerMeta" style="margin-top:6px;font-size:11px;color:#94a3b8">' +
-          escapeHtml(formatBytes(first.size)) +
-        '</div>' +
-        '<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">' +
-          '<a href="#" data-opfs-download-selected="1" style="color:#93c5fd;text-decoration:none;font-weight:800">Download Selected</a>' +
-        '</div>' +
-      '</div>' +
-    '</details>';
+    '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
+      opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
+    '</div>' +
+    '<select id="clipPicker" ' +
+      'style="width:100%;padding:10px 12px;border-radius:10px;background:#111827;color:#f8fafc;border:1px solid rgba(255,255,255,.12);font-weight:700">' +
+      options +
+    '</select>' +
+    '<div id="clipPickerMeta" style="margin-top:6px;font-size:11px;color:#94a3b8">' +
+      escapeHtml(formatBytes(first.size)) +
+    '</div>' +
+    '<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">' +
+      '<a href="#" data-opfs-download-selected="1" style="color:#93c5fd;text-decoration:none;font-weight:800">Download Selected</a>' +
+      '<a href="#" data-opfs-delete-selected="1" style="color:#fca5a5;text-decoration:none;font-weight:800">Delete Selected</a>' +
+    '</div>';
 }
 
   async function writeBlobToOpfs(blob, filename) {
@@ -936,6 +928,23 @@ els.recentText.addEventListener('click', async function(evt){
       await downloadOpfsClip(name);
     } catch (e) {
       setDebug('Download failed.', true);
+    }
+    return;
+  }
+
+  const delSelected = evt.target.closest('[data-opfs-delete-selected]');
+  if (delSelected) {
+    evt.preventDefault();
+    try {
+      const name = getSelectedClipName();
+      if (!name) {
+        setDebug('No clip selected.', true);
+        return;
+      }
+      await deleteOpfsClip(name);
+      setDebug('Clip deleted.', false);
+    } catch (e) {
+      setDebug('Delete failed.', true);
     }
   }
 });
