@@ -237,6 +237,23 @@ function updateStorageUi() {
   return true;
 }
 
+  async function probeDirectoryWrite(dirHandle) {
+  const probeName = '.__aztkg_probe_' + Date.now() + '.tmp';
+
+  const fileHandle = await dirHandle.getFileHandle(probeName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write('ok');
+  await writable.close();
+
+  try {
+    await dirHandle.removeEntry(probeName);
+  } catch (e) {
+    // ignore cleanup failure
+  }
+
+  return true;
+}
+
   async function restoreStorageHandle() {
     if (!('showDirectoryPicker' in window)) {
       storageDirHandle = null;
@@ -301,6 +318,39 @@ function updateStorageUi() {
   storagePermission = 'granted';
   storageArmed = true;
   updateStorageUi();
+
+  updateHeartbeat({
+    storageArmed: '1',
+    storagePermission: 'granted'
+  });
+
+  setDebug('Storage armed. Probe write succeeded.', false);
+  return true;
+} catch (e) {
+  console.error('Probe write failed:', e);
+
+  storagePermission = 'prompt';
+  storageArmed = false;
+  storageDirHandle = null;
+  updateStorageUi();
+
+  updateHeartbeat({
+    storageArmed: '0',
+    storagePermission: 'prompt'
+  });
+
+  setDebug(
+    'Selected folder is not writable here: ' + (e && e.name ? e.name : 'unknown error'),
+    true
+  );
+  return false;
+}
+
+      try {
+  await probeDirectoryWrite(storageDirHandle);
+  storagePermission = 'granted';
+  storageArmed = true;
+  updateStorageUi();
   setDebug('Storage armed. Probe write succeeded.', false);
 } catch (e) {
   console.error('Probe write failed:', e);
@@ -315,13 +365,6 @@ function updateStorageUi() {
   );
   return false;
 }
-
-      updateStorageUi();
-
-      updateHeartbeat({
-        storageArmed: storageArmed ? '1' : '0',
-        storagePermission: storagePermission
-      });
 
       return storageArmed;
     } catch (e) {
