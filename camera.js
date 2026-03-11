@@ -3,7 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r5';
+  const BUILD_TAG = 'camera.js 2026-03-10 r6';
   console.log('AZTKG Camera build:', BUILD_TAG);
   
   let stream = null;
