@@ -543,17 +543,18 @@ async function writeBlobToPickedDirectory(blob, filename) {
   } catch (e) {
     console.error('Direct save failed:', e);
 
+    const msg =
+      (e && e.message) ? e.message :
+      ((e && e.name) ? e.name : 'unknown error');
+
+    // Do not await abort here — it can hang and trap the UI on "Saving clip…"
     try {
-      if (writable) {
-        await writable.abort();
+      if (writable && typeof writable.abort === 'function') {
+        writable.abort().catch(function(){});
       }
     } catch (_) {}
 
-    setDebug(
-      'Direct save failed: ' +
-      (e && e.message ? e.message : (e && e.name ? e.name : 'unknown error')),
-      true
-    );
+    setDebug('Direct save failed: ' + msg, true);
 
     storagePermission = 'granted';
     storageArmed = !!storageDirHandle;
