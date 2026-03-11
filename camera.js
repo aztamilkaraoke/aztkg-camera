@@ -3,7 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r2';
+  const BUILD_TAG = 'camera.js 2026-03-10 r3';
   console.log('AZTKG Camera build:', BUILD_TAG);
   
   let stream = null;
@@ -234,23 +234,6 @@ function updateStorageUi() {
     await dirHandle.removeEntry(probeName);
   } catch (e) {
     // non-fatal
-  }
-
-  return true;
-}
-
-  async function probeDirectoryWrite(dirHandle) {
-  const probeName = '.__aztkg_probe_' + Date.now() + '.tmp';
-
-  const fileHandle = await dirHandle.getFileHandle(probeName, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write('ok');
-  await writable.close();
-
-  try {
-    await dirHandle.removeEntry(probeName);
-  } catch (e) {
-    // ignore cleanup failure
   }
 
   return true;
@@ -517,8 +500,7 @@ async function writeBlobToPickedDirectory(blob, filename) {
     const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
     writable = await fileHandle.createWritable();
 
-    const buffer = await blob.arrayBuffer();
-    await writable.write(buffer);
+    await writable.write(blob);
     await writable.close();
 
     storagePermission = 'granted';
@@ -527,6 +509,11 @@ async function writeBlobToPickedDirectory(blob, filename) {
     return true;
   } catch (e) {
     console.error('Direct save failed:', e);
+
+    try {
+      if (writable) await writable.abort();
+    } catch (_) {}
+
     setDebug(
       'Direct save failed: ' +
       (e && e.name ? e.name : 'unknown error') +
@@ -534,14 +521,10 @@ async function writeBlobToPickedDirectory(blob, filename) {
       true
     );
 
-    try {
-      if (writable) {
-        await writable.abort();
-      }
-    } catch (_) {}
-
-    storagePermission = 'prompt';
-    storageArmed = false;
+    // Keep the folder armed; the handle still exists.
+    // A write failure is not the same as "storage not armed".
+    storagePermission = 'granted';
+    storageArmed = !!storageDirHandle;
     updateStorageUi();
     return false;
   }
@@ -724,9 +707,14 @@ if (!storageDirHandle) {
 
         setDebug('Saving clip… ' + Math.round(blob.size / 1024) + ' KB', false);
 
-        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+                const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
-          setDebug('Direct save failed. Download fallback suppressed for diagnosis.', true);
+          updateHeartbeat({
+            recorderState: 'error',
+            currentPerformanceId: '',
+            lastError: 'Direct save failed'
+          });
+          return;
         }
 
         beaconGet({
