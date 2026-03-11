@@ -3,7 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r1';
+  const BUILD_TAG = 'camera.js 2026-03-10 r2';
   console.log('AZTKG Camera build:', BUILD_TAG);
   
   let stream = null;
@@ -511,10 +511,14 @@ async function armStorage() {
 async function writeBlobToPickedDirectory(blob, filename) {
   if (!storageDirHandle) return false;
 
+  let writable = null;
+
   try {
     const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(blob);
+    writable = await fileHandle.createWritable();
+
+    const buffer = await blob.arrayBuffer();
+    await writable.write(buffer);
     await writable.close();
 
     storagePermission = 'granted';
@@ -523,10 +527,18 @@ async function writeBlobToPickedDirectory(blob, filename) {
     return true;
   } catch (e) {
     console.error('Direct save failed:', e);
+    setDebug(
+      'Direct save failed: ' +
+      (e && e.name ? e.name : 'unknown error') +
+      (e && e.message ? (' - ' + e.message) : ''),
+      true
+    );
 
-    const errName = e && e.name ? e.name : 'unknown';
-    const errMsg = e && e.message ? e.message : '';
-    setDebug('Direct save failed: ' + errName + (errMsg ? (' - ' + errMsg) : ''), true);
+    try {
+      if (writable) {
+        await writable.abort();
+      }
+    } catch (_) {}
 
     storagePermission = 'prompt';
     storageArmed = false;
@@ -700,7 +712,17 @@ if (!storageDirHandle) {
         const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
         const filename = buildFilename(activePerf);
 
-        setDebug('Saving clip…', false);
+        if (!blob || !blob.size) {
+          setDebug('Clip save failed: recorded file is 0 B.', true);
+          updateHeartbeat({
+            recorderState: 'error',
+            currentPerformanceId: '',
+            lastError: 'Recorded blob is empty'
+          });
+          return;
+        }
+
+        setDebug('Saving clip… ' + Math.round(blob.size / 1024) + ' KB', false);
 
         const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
@@ -741,7 +763,9 @@ if (!storageDirHandle) {
         recordingStartedAtMs = 0;
         els.elapsed.textContent = '';
         updateStopButton(false);
-        setIdleDebug();
+                if (!els.debugLine || !/failed|0 B|error/i.test(els.debugLine.textContent || '')) {
+          setIdleDebug();
+        }
       }
     };
 
@@ -775,6 +799,9 @@ if (!storageDirHandle) {
     });
 
     setDebug('Stopping recorder...', false);
+        try {
+      recorder.requestData();
+    } catch (e) {}
     recorder.stop();
     updateStopButton(false);
   }
