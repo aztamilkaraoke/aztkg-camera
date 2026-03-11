@@ -3,7 +3,9 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-
+  const BUILD_TAG = 'camera.js 2026-03-10 r1';
+  console.log('AZTKG Camera build:', BUILD_TAG);
+  
   let stream = null;
   let recorder = null;
   let chunks = [];
@@ -521,7 +523,10 @@ async function writeBlobToPickedDirectory(blob, filename) {
     return true;
   } catch (e) {
     console.error('Direct save failed:', e);
-    setDebug('Direct save failed: ' + (e && e.name ? e.name : 'unknown error'), true);
+
+    const errName = e && e.name ? e.name : 'unknown';
+    const errMsg = e && e.message ? e.message : '';
+    setDebug('Direct save failed: ' + errName + (errMsg ? (' - ' + errMsg) : ''), true);
 
     storagePermission = 'prompt';
     storageArmed = false;
@@ -608,7 +613,7 @@ async function writeBlobToPickedDirectory(blob, filename) {
       (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
     );
 
-    setDebug('Camera initialized. Syncing meet state…', false);
+    setDebug('Camera initialized. Syncing meet state… [' + BUILD_TAG + ']', false);
 
 await restoreStorageHandle();
 updateStorageUi();
