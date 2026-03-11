@@ -3,7 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r6';
+  const BUILD_TAG = 'camera.js 2026-03-10 r7';
   console.log('AZTKG Camera build:', BUILD_TAG);
   
   let stream = null;
@@ -281,6 +281,21 @@ function updateStorageUi() {
     }
   }
 
+  async function refreshStorageHandleFromStore() {
+  try {
+    const key = localStorage.getItem('aztkg.camera.storage.dirHandle');
+    if (!key) return null;
+
+    const handle = await idbKeyval.get(key);
+    if (!handle) return null;
+
+    storageDirHandle = handle;
+    return handle;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function armStorage() {
   if (!window.showDirectoryPicker) {
     setDebug('This browser does not support folder-based silent saves.', true);
@@ -471,25 +486,26 @@ async function armStorage() {
   }
 
   function buildFilename(perf) {
-    const singerPart = (perf.singers || []).join(' & ');
+  const singerPart = (perf.singers || []).join(' & ');
 
-    const base = [
-      perf.songName,
-      singerPart,
-      perf.songType,
-      perf.meetName,
-      perf.movieName,
-      perf.composerName
-    ]
-      .filter(Boolean)
-      .join(' - ')
-      .replace(/[\/\\:*?"<>|]/g, '-')
-      .replace(/\s+/g, ' ')
-      .replace(/\.+$/g, '')
-      .trim();
+  const base = [
+    perf.songName,
+    singerPart,
+    perf.songType,
+    perf.meetName,
+    perf.movieName,
+    perf.composerName
+  ]
+    .filter(Boolean)
+    .join(' - ')
+    .replace(/[\/\\:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/\.+$/g, '')
+    .trim();
 
-    return base + '.' + chosenExt;
-  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return base + ' - ' + stamp + '.' + chosenExt;
+}
 
 function withTimeout(promise, ms, label) {
   return Promise.race([
@@ -503,14 +519,18 @@ function withTimeout(promise, ms, label) {
 }
   
 async function writeBlobToPickedDirectory(blob, filename) {
-  if (!storageDirHandle) return false;
-
   let writable = null;
 
   try {
+    const dirHandle = await refreshStorageHandleFromStore();
+    if (!dirHandle) {
+      setDebug('Direct save failed: storage handle unavailable', true);
+      return false;
+    }
+
     setDebug('Saving clip… opening file', false);
     const fileHandle = await withTimeout(
-      storageDirHandle.getFileHandle(filename, { create: true }),
+      dirHandle.getFileHandle(filename, { create: true }),
       8000,
       'getFileHandle'
     );
@@ -543,18 +563,17 @@ async function writeBlobToPickedDirectory(blob, filename) {
   } catch (e) {
     console.error('Direct save failed:', e);
 
-    const msg =
-      (e && e.message) ? e.message :
-      ((e && e.name) ? e.name : 'unknown error');
-
-    // Do not await abort here — it can hang and trap the UI on "Saving clip…"
     try {
       if (writable && typeof writable.abort === 'function') {
         writable.abort().catch(function(){});
       }
     } catch (_) {}
 
-    setDebug('Direct save failed: ' + msg, true);
+    setDebug(
+      'Direct save failed: ' +
+      (e && e.message ? e.message : (e && e.name ? e.name : 'unknown error')),
+      true
+    );
 
     storagePermission = 'granted';
     storageArmed = !!storageDirHandle;
