@@ -511,15 +511,15 @@ function renderClipPanel() {
     '<div style="color:#cbd5e1;font-weight:800;margin-bottom:8px">' +
       opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
     '</div>' +
-    '<div style="min-height:118px;display:flex;flex-direction:column;justify-content:flex-start">' +
+    '<div style="min-height:92px;display:flex;flex-direction:column;justify-content:flex-start">' +
       '<select id="clipPicker" ' +
         'style="width:100%;padding:10px 12px;border-radius:10px;background:#111827;color:#f8fafc;border:1px solid rgba(255,255,255,.12);font-weight:700">' +
         options +
       '</select>' +
-      '<div id="clipPickerMeta" style="margin-top:8px;font-size:12px;color:#94a3b8">' +
+      '<div id="clipPickerMeta" style="margin-top:6px;font-size:12px;color:#94a3b8">' +
         escapeHtml(formatBytes(first.size)) +
       '</div>' +
-      '<div style="margin-top:10px">' +
+      '<div style="margin-top:6px">' +
         '<a href="#" data-opfs-download-selected="1" style="color:#93c5fd;text-decoration:none;font-weight:800">Download Selected</a>' +
       '</div>' +
     '</div>';
