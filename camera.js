@@ -384,15 +384,11 @@ renderClipPanel();
       .replace(/\.+$/g, '')
       .trim() || 'AZTKG Recording';
 
-const d = new Date();
-const ts =
-  d.getFullYear() + '-' +
-  String(d.getMonth() + 1).padStart(2, '0') + '-' +
-  String(d.getDate()).padStart(2, '0') + ' ' +
-  String(d.getHours()).padStart(2, '0') + '-' +
-  String(d.getMinutes()).padStart(2, '0') + '-' +
-  String(d.getSeconds()).padStart(2, '0');
-    
+    const ts = new Date().toISOString()
+      .replace(/[:.]/g, '-')
+      .replace('T', ' ')
+      .replace('Z', ' UTC');
+
     return base + ' - ' + ts + '.' + chosenExt;
   }
 
@@ -473,13 +469,11 @@ const ts =
       );
     });
 
-els.recentText.innerHTML =
-  '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
-    opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
-  '</div>' +
-  '<div style="max-height:240px;overflow-y:auto;padding-right:4px">' +
-    rows.join('') +
-  '</div>';
+    els.recentText.innerHTML =
+      '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
+      opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
+      '</div>' +
+      rows.join('');
   }
 
   async function writeBlobToOpfs(blob, filename) {
@@ -502,13 +496,11 @@ els.recentText.innerHTML =
     }
   }
 
-    async function exportAllClips() {
+  async function exportAllClips() {
     if (!window.showDirectoryPicker) {
       setDebug('Folder export is not supported in this browser.', true);
       return false;
     }
-
-    await loadOpfsClipIndex();
 
     if (!opfsClipIndex.length) {
       setDebug('No clips available to export.', true);
@@ -517,40 +509,27 @@ els.recentText.innerHTML =
 
     const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
     const clipsDir = await getOpfsClipsDir();
-    const names = opfsClipIndex.map(function(item) { return item.name; });
 
     let done = 0;
 
-    for (const name of names) {
-      const srcHandle = await clipsDir.getFileHandle(name, { create: false });
+    for (const item of opfsClipIndex) {
+      const srcHandle = await clipsDir.getFileHandle(item.name, { create: false });
       const srcFile = await srcHandle.getFile();
-      const bytes = await srcFile.arrayBuffer();
-
-      let writable = null;
+      const outHandle = await dirHandle.getFileHandle(item.name, { create: true });
+      const writable = await outHandle.createWritable();
 
       try {
-        const outHandle = await dirHandle.getFileHandle(name, { create: true });
-        writable = await outHandle.createWritable({ keepExistingData: false });
-        await writable.write(bytes);
-        await writable.truncate(bytes.byteLength);
+        await writable.write(srcFile);
         await writable.close();
-        writable = null;
-
         done++;
-        setDebug('Exporting clips… ' + done + '/' + names.length, false);
+        setDebug('Exporting clips… ' + done + '/' + opfsClipIndex.length, false);
       } catch (e) {
-        try {
-          if (writable) await writable.abort();
-        } catch (_) {}
-
+        try { await writable.abort(); } catch (_) {}
         throw e;
       }
     }
 
-    setDebug(
-      'Export complete. ' + done + ' clip' + (done === 1 ? '' : 's') + ' exported.',
-      false
-    );
+    setDebug('Export complete. ' + done + ' clip' + (done === 1 ? '' : 's') + ' exported.', false);
     return true;
   }
 
