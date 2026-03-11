@@ -3,7 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r4';
+  const BUILD_TAG = 'camera.js 2026-03-10 r5';
   console.log('AZTKG Camera build:', BUILD_TAG);
   
   let stream = null;
@@ -491,17 +491,50 @@ async function armStorage() {
     return base + '.' + chosenExt;
   }
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error(label + ' timed out after ' + ms + ' ms'));
+      }, ms);
+    })
+  ]);
+}
+  
 async function writeBlobToPickedDirectory(blob, filename) {
   if (!storageDirHandle) return false;
 
   let writable = null;
 
   try {
-    const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
-    writable = await fileHandle.createWritable();
+    setDebug('Saving clip… opening file', false);
+    const fileHandle = await withTimeout(
+      storageDirHandle.getFileHandle(filename, { create: true }),
+      8000,
+      'getFileHandle'
+    );
 
-    await writable.write(blob);
-    await writable.close();
+    setDebug('Saving clip… opening writer', false);
+    writable = await withTimeout(
+      fileHandle.createWritable(),
+      8000,
+      'createWritable'
+    );
+
+    setDebug('Saving clip… writing ' + Math.round(blob.size / 1024) + ' KB', false);
+    await withTimeout(
+      writable.write(blob),
+      15000,
+      'write'
+    );
+
+    setDebug('Saving clip… finalizing file', false);
+    await withTimeout(
+      writable.close(),
+      15000,
+      'close'
+    );
 
     storagePermission = 'granted';
     storageArmed = true;
@@ -511,13 +544,14 @@ async function writeBlobToPickedDirectory(blob, filename) {
     console.error('Direct save failed:', e);
 
     try {
-      if (writable) await writable.abort();
+      if (writable) {
+        await writable.abort();
+      }
     } catch (_) {}
 
     setDebug(
       'Direct save failed: ' +
-      (e && e.name ? e.name : 'unknown error') +
-      (e && e.message ? (' - ' + e.message) : ''),
+      (e && e.message ? e.message : (e && e.name ? e.name : 'unknown error')),
       true
     );
 
@@ -705,11 +739,12 @@ if (!storageDirHandle) {
 
         setDebug('Saving clip… ' + Math.round(blob.size / 1024) + ' KB', false);
 
-        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+                const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
           updateHeartbeat({
             recorderState: 'error',
             currentPerformanceId: '',
+            currentCommandSeq: lastProcessedCommandSeq || 0,
             lastError: 'Direct save failed'
           });
           return;
