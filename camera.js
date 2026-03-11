@@ -20,12 +20,7 @@
   let pollTimer = null;
   let pollFailCount = 0;
   let currentPollMs = 0;
-  let storageDirHandle = null;
-  let storageArmed = false;
-  let storagePermission = 'prompt';
   let opfsRootHandle = null;
-  let lastSavedOpfsName = '';
-  let lastSavedOpfsBlob = null;
   const OPFS_CLIPS_DIR = 'clips';
   let opfsClipIndex = [];
 
@@ -198,63 +193,6 @@
     }
 
     setTop(els.storageState, 'Storage: Unsupported');
-  }
-
-  async function verifyDirectoryPermission(dirHandle, ask) {
-    if (!dirHandle) return 'prompt';
-
-    const opts = { mode: 'readwrite' };
-
-    try {
-      let p = await dirHandle.queryPermission(opts);
-      if (p === 'granted') return 'granted';
-      if (ask) p = await dirHandle.requestPermission(opts);
-      return p;
-    } catch (e) {
-      return 'prompt';
-    }
-  }
-
-  async function restoreStorageHandle() {
-    if (!('showDirectoryPicker' in window)) {
-      storageDirHandle = null;
-      storageArmed = false;
-      storagePermission = 'prompt';
-      updateStorageUi();
-      return false;
-    }
-
-    try {
-      const raw = localStorage.getItem('aztkg.camera.storage.dirHandle');
-      if (!raw) {
-        storageDirHandle = null;
-        storageArmed = false;
-        storagePermission = 'prompt';
-        updateStorageUi();
-        return false;
-      }
-
-      const handle = await idbKeyval.get(raw);
-      if (!handle) {
-        storageDirHandle = null;
-        storageArmed = false;
-        storagePermission = 'prompt';
-        updateStorageUi();
-        return false;
-      }
-
-      storageDirHandle = handle;
-      storagePermission = await verifyDirectoryPermission(storageDirHandle, false);
-      storageArmed = storagePermission === 'granted';
-      updateStorageUi();
-      return storageArmed;
-    } catch (e) {
-      storageDirHandle = null;
-      storageArmed = false;
-      storagePermission = 'prompt';
-      updateStorageUi();
-      return false;
-    }
   }
 
   async function armStorage() {
@@ -675,7 +613,6 @@ renderClipPanel();
 
     setDebug('Camera initialized. Syncing meet state…', false);
 
-await restoreStorageHandle();
 updateStorageUi();
 
 beaconGet({
@@ -688,8 +625,6 @@ beaconGet({
   actualWidth: s.width || 0,
   actualHeight: s.height || 0,
   actualFps: s.frameRate || 0,
-  storageArmed: storageArmed ? '1' : '0',
-  storagePermission: storagePermission,
   lastError: '',
   _ts: Date.now()
 });
@@ -700,12 +635,11 @@ await requestWakeLock();
 
 function updateHeartbeat(extra) {
   const params = Object.assign({
-    api: 'camera-status',
-    pageOpen: '1',
-    storageArmed: storageArmed ? '1' : '0',
-    storagePermission: storagePermission,
-    _ts: Date.now()
-  }, extra || {});
+  api: 'camera-status',
+  pageOpen: '1',
+  storageMode: 'opfs',
+  _ts: Date.now()
+}, extra || {});
   beaconGet(params);
 }
 
