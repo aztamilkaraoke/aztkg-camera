@@ -220,6 +220,23 @@ function updateStorageUi() {
     }
   }
 
+  async function probeDirectoryWrite(dirHandle) {
+  const probeName = '.__aztkg_probe_' + Date.now() + '.tmp';
+
+  const fileHandle = await dirHandle.getFileHandle(probeName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write('ok');
+  await writable.close();
+
+  try {
+    await dirHandle.removeEntry(probeName);
+  } catch (e) {
+    // non-fatal
+  }
+
+  return true;
+}
+
   async function restoreStorageHandle() {
     if (!('showDirectoryPicker' in window)) {
       storageDirHandle = null;
@@ -279,18 +296,32 @@ function updateStorageUi() {
       storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
       storageArmed = !!storageDirHandle;
 
+      try {
+  await probeDirectoryWrite(storageDirHandle);
+  storagePermission = 'granted';
+  storageArmed = true;
+  updateStorageUi();
+  setDebug('Storage armed. Probe write succeeded.', false);
+} catch (e) {
+  console.error('Probe write failed:', e);
+  storagePermission = 'prompt';
+  storageArmed = false;
+  storageDirHandle = null;
+  updateStorageUi();
+  setDebug(
+    'Selected folder is not writable here: ' +
+    (e && e.name ? e.name : 'unknown error'),
+    true
+  );
+  return false;
+}
+
       updateStorageUi();
 
       updateHeartbeat({
         storageArmed: storageArmed ? '1' : '0',
         storagePermission: storagePermission
       });
-
-      if (storagePermission === 'granted') {
-        setDebug('Storage armed. Future clips will save without prompts.', false);
-      } else {
-        setDebug('Storage selected. Re-arm may still be needed before silent saves work.', true);
-      }
 
       return storageArmed;
     } catch (e) {
@@ -644,7 +675,7 @@ if (!storageDirHandle) {
 
         const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
-          triggerDownload(blob, filename);
+          setDebug('Direct save failed. Download fallback suppressed for diagnosis.', true);
         }
 
         beaconGet({
