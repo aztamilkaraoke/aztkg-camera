@@ -83,41 +83,45 @@
   }
 
   .seq{
-    font-size:13px;
+    font-size:12px;
     font-weight:900;
     color:var(--muted);
     line-height:1.1;
   }
 
   .song{
-    margin-top:6px;
-    font-size:24px;
-    line-height:1.06;
+    margin-top:4px;
+    font-size:22px;
+    line-height:1.08;
     font-weight:900;
     word-break:break-word;
   }
 
   .singers{
-    margin-top:8px;
-    font-size:16px;
+    margin-top:6px;
+    font-size:15px;
     font-weight:800;
     color:var(--muted);
     line-height:1.2;
   }
 
   .meta{
-    margin-top:8px;
+    margin-top:0;
     display:flex;
     flex-direction:column;
-    gap:4px;
+    gap:0;
     font-size:12px;
     color:var(--muted);
     font-weight:700;
     line-height:1.2;
   }
 
+  .meta:empty{
+    display:none;
+  }
+
   .statusWrap{
-    margin-top:10px;
+    margin-top:8px;
     display:flex;
     align-items:center;
     justify-content:space-between;
@@ -394,20 +398,20 @@
         </div>
       </div>
 
-      <div class="card">
-        <div class="recentTitle">Recorded Clips</div>
-        <div class="recentText" id="recentText">—</div>
-      </div>
-
       <div class="card previewWrap">
         <video id="preview" autoplay playsinline muted></video>
         <div class="debugLine" id="debugLine">Initializing camera…</div>
 
-      <div class="btnRow">
-        <button class="btn btnDanger" id="btnEmergencyStop" type="button">STOP RECORDING</button>
-        <button class="btn btnGhost" id="btnArmStorage" type="button">EXPORT ALL CLIPS</button>
-        <button class="btn btnGhost" id="btnRefreshState" type="button">REFRESH</button>
+        <div class="btnRow">
+          <button class="btn btnDanger" id="btnEmergencyStop" type="button">STOP RECORDING</button>
+          <button class="btn btnGhost" id="btnArmStorage" type="button">EXPORT ALL CLIPS</button>
+          <button class="btn btnGhost" id="btnRefreshState" type="button">REFRESH</button>
+        </div>
       </div>
+
+      <div class="card">
+        <div class="recentTitle">Recorded Clips</div>
+        <div class="recentText" id="recentText">—</div>
       </div>
     </div>
   </div>
