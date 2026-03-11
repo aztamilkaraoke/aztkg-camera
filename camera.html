@@ -265,15 +265,15 @@
     }
 
     .main > .card:nth-child(2){
-      grid-area:recent;
-      align-self:start;
-    }
-
-    .main > .card:nth-child(3){
       grid-area:preview;
       min-height:0;
       height:100%;
       align-self:stretch;
+    }
+
+    .main > .card:nth-child(3){
+      grid-area:recent;
+      align-self:start;
     }
 
     .card{
@@ -282,7 +282,7 @@
       overflow:hidden;
     }
 
-    .main > .card:nth-child(2){
+    .main > .card:nth-child(3){
       padding:6px 8px;
     }
 
