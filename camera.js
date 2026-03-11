@@ -3,9 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r7';
-  console.log('AZTKG Camera build:', BUILD_TAG);
-  
+
   let stream = null;
   let recorder = null;
   let chunks = [];
@@ -74,13 +72,13 @@
   }
 
   function chooseMime() {
-const prefs = [
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm',
-  'video/mp4;codecs=avc1,mp4a.40.2',
-  'video/mp4'
-];
+    const prefs = [
+      'video/mp4;codecs=avc1,mp4a.40.2',
+      'video/mp4',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
 
     for (const m of prefs) {
       try {
@@ -186,26 +184,26 @@ const prefs = [
     }
   };
 
-function updateStorageUi() {
-  if (!els.storageState) return;
+    function updateStorageUi() {
+    if (!els.storageState) return;
 
-  if (!window.showDirectoryPicker) {
-    setTop(els.storageState, 'Storage: Unsupported');
-    return;
+    if (!window.showDirectoryPicker) {
+      setTop(els.storageState, 'Storage: Unsupported');
+      return;
+    }
+
+    if (storageArmed && storagePermission === 'granted') {
+      setTop(els.storageState, 'Storage: Ready');
+      return;
+    }
+
+    if (storageArmed) {
+      setTop(els.storageState, 'Storage: Re-arm needed');
+      return;
+    }
+
+    setTop(els.storageState, 'Storage: Not armed');
   }
-
-  if (storageArmed && storageDirHandle) {
-    setTop(els.storageState, 'Storage: Ready');
-    return;
-  }
-
-  if (storageDirHandle) {
-    setTop(els.storageState, 'Storage: Re-arm needed');
-    return;
-  }
-
-  setTop(els.storageState, 'Storage: Not armed');
-}
 
   async function verifyDirectoryPermission(dirHandle, ask) {
     if (!dirHandle) return 'prompt';
@@ -221,23 +219,6 @@ function updateStorageUi() {
       return 'prompt';
     }
   }
-
-  async function probeDirectoryWrite(dirHandle) {
-  const probeName = '.__aztkg_probe_' + Date.now() + '.tmp';
-
-  const fileHandle = await dirHandle.getFileHandle(probeName, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write('ok');
-  await writable.close();
-
-  try {
-    await dirHandle.removeEntry(probeName);
-  } catch (e) {
-    // non-fatal
-  }
-
-  return true;
-}
 
   async function restoreStorageHandle() {
     if (!('showDirectoryPicker' in window)) {
@@ -269,7 +250,7 @@ function updateStorageUi() {
 
       storageDirHandle = handle;
       storagePermission = await verifyDirectoryPermission(storageDirHandle, false);
-      storageArmed = !!storageDirHandle;
+      storageArmed = storagePermission === 'granted';
       updateStorageUi();
       return storageArmed;
     } catch (e) {
@@ -281,81 +262,45 @@ function updateStorageUi() {
     }
   }
 
-  async function refreshStorageHandleFromStore() {
-  try {
-    const key = localStorage.getItem('aztkg.camera.storage.dirHandle');
-    if (!key) return null;
-
-    const handle = await idbKeyval.get(key);
-    if (!handle) return null;
-
-    storageDirHandle = handle;
-    return handle;
-  } catch (e) {
-    return null;
-  }
-}
-
-async function armStorage() {
-  if (!window.showDirectoryPicker) {
-    setDebug('This browser does not support folder-based silent saves.', true);
-    updateStorageUi();
-    return false;
-  }
-
-  try {
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    const key = 'aztkg-storage-dir-v1';
-
-    await idbKeyval.set(key, dirHandle);
-    localStorage.setItem('aztkg.camera.storage.dirHandle', key);
-
-    storageDirHandle = dirHandle;
-    storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
-    storageArmed = !!storageDirHandle;
-
-    try {
-      await probeDirectoryWrite(storageDirHandle);
-
-      storagePermission = 'granted';
-      storageArmed = true;
+  async function armStorage() {
+    if (!window.showDirectoryPicker) {
+      setDebug('This browser does not support folder-based silent saves.', true);
       updateStorageUi();
-
-      updateHeartbeat({
-        storageArmed: '1',
-        storagePermission: 'granted'
-      });
-
-      setDebug('Storage armed. Probe write succeeded.', false);
-      return true;
-    } catch (e) {
-      console.error('Probe write failed:', e);
-
-      storagePermission = 'prompt';
-      storageArmed = false;
-      storageDirHandle = null;
-      updateStorageUi();
-
-      updateHeartbeat({
-        storageArmed: '0',
-        storagePermission: 'prompt'
-      });
-
-      setDebug(
-        'Selected folder is not writable here: ' +
-        (e && e.name ? e.name : 'unknown error'),
-        true
-      );
       return false;
     }
-  } catch (e) {
-    storageArmed = false;
-    storagePermission = 'prompt';
-    updateStorageUi();
-    setDebug('Storage arm cancelled.', true);
-    return false;
+
+    try {
+      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      const key = 'aztkg-storage-dir-v1';
+      await idbKeyval.set(key, dirHandle);
+      localStorage.setItem('aztkg.camera.storage.dirHandle', key);
+
+      storageDirHandle = dirHandle;
+      storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
+      storageArmed = storagePermission === 'granted';
+
+      updateStorageUi();
+
+      updateHeartbeat({
+        storageArmed: storageArmed ? '1' : '0',
+        storagePermission: storagePermission
+      });
+
+      if (storageArmed) {
+        setDebug('Storage armed. Future clips will save without prompts.', false);
+      } else {
+        setDebug('Storage selected, but write permission is not granted.', true);
+      }
+
+      return storageArmed;
+    } catch (e) {
+      storageArmed = false;
+      storagePermission = 'prompt';
+      updateStorageUi();
+      setDebug('Storage arm cancelled.', true);
+      return false;
+    }
   }
-}
 
   function buildMetaLines(perf) {
     const lines = [];
@@ -486,97 +431,45 @@ async function armStorage() {
   }
 
   function buildFilename(perf) {
-  const singerPart = (perf.singers || []).join(' & ');
+    const singerPart = (perf.singers || []).join(' & ');
 
-  const base = [
-    perf.songName,
-    singerPart,
-    perf.songType,
-    perf.meetName,
-    perf.movieName,
-    perf.composerName
-  ]
-    .filter(Boolean)
-    .join(' - ')
-    .replace(/[\/\\:*?"<>|]/g, '-')
-    .replace(/\s+/g, ' ')
-    .replace(/\.+$/g, '')
-    .trim();
+    const base = [
+      perf.songName,
+      singerPart,
+      perf.songType,
+      perf.meetName,
+      perf.movieName,
+      perf.composerName
+    ]
+      .filter(Boolean)
+      .join(' - ')
+      .replace(/[\/\\:*?"<>|]/g, '-')
+      .replace(/\s+/g, ' ')
+      .replace(/\.+$/g, '')
+      .trim();
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  return base + ' - ' + stamp + '.' + chosenExt;
-}
+    return base + '.' + chosenExt;
+  }
 
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise(function(_, reject) {
-      setTimeout(function() {
-        reject(new Error(label + ' timed out after ' + ms + ' ms'));
-      }, ms);
-    })
-  ]);
-}
-  
 async function writeBlobToPickedDirectory(blob, filename) {
-  let writable = null;
+  if (!storageDirHandle || !storageArmed) return false;
 
   try {
-    const dirHandle = await refreshStorageHandleFromStore();
-    if (!dirHandle) {
-      setDebug('Direct save failed: storage handle unavailable', true);
-      return false;
-    }
-
-    setDebug('Saving clip… opening file', false);
-    const fileHandle = await withTimeout(
-      dirHandle.getFileHandle(filename, { create: true }),
-      8000,
-      'getFileHandle'
-    );
-
-    setDebug('Saving clip… opening writer', false);
-    writable = await withTimeout(
-      fileHandle.createWritable(),
-      8000,
-      'createWritable'
-    );
-
-    setDebug('Saving clip… writing ' + Math.round(blob.size / 1024) + ' KB', false);
-    await withTimeout(
-      writable.write(blob),
-      15000,
-      'write'
-    );
-
-    setDebug('Saving clip… finalizing file', false);
-    await withTimeout(
-      writable.close(),
-      15000,
-      'close'
-    );
-
-    storagePermission = 'granted';
-    storageArmed = true;
+    const perm = await verifyDirectoryPermission(storageDirHandle, false);
+    storagePermission = perm;
+    storageArmed = perm === 'granted';
     updateStorageUi();
+
+    if (!storageArmed) return false;
+
+    const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
     return true;
   } catch (e) {
-    console.error('Direct save failed:', e);
-
-    try {
-      if (writable && typeof writable.abort === 'function') {
-        writable.abort().catch(function(){});
-      }
-    } catch (_) {}
-
-    setDebug(
-      'Direct save failed: ' +
-      (e && e.message ? e.message : (e && e.name ? e.name : 'unknown error')),
-      true
-    );
-
-    storagePermission = 'granted';
-    storageArmed = !!storageDirHandle;
+    storagePermission = 'prompt';
+    storageArmed = false;
     updateStorageUi();
     return false;
   }
@@ -660,7 +553,7 @@ async function writeBlobToPickedDirectory(blob, filename) {
       (s.frameRate ? (' @ ' + s.frameRate + 'fps') : '')
     );
 
-    setDebug('Camera initialized. Syncing meet state… [' + BUILD_TAG + ']', false);
+    setDebug('Camera initialized. Syncing meet state…', false);
 
 await restoreStorageHandle();
 updateStorageUi();
@@ -697,19 +590,19 @@ function updateHeartbeat(extra) {
 }
 
   function startRecording(perf, commandSeq) {
-if (!stream) return;
-if (!storageDirHandle) {
-  setDebug('Cannot start recording — storage is not armed.', true);
+    if (!stream) return;
+        if (!storageArmed || !storageDirHandle) {
+      setDebug('Cannot start recording — storage is not armed.', true);
 
-  updateHeartbeat({
-    recorderState: 'error',
-    currentCommandSeq: commandSeq,
-    lastError: 'Storage not armed'
-  });
+      updateHeartbeat({
+        recorderState: 'error',
+        currentCommandSeq: commandSeq,
+        lastError: 'Storage not armed'
+      });
 
-  lastProcessedCommandSeq = commandSeq;
-  return;
-}
+      lastProcessedCommandSeq = commandSeq;
+      return;
+    }
     if (recorder && recorder.state === 'recording') {
       lastProcessedCommandSeq = commandSeq;
       return;
@@ -747,27 +640,11 @@ if (!storageDirHandle) {
         const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
         const filename = buildFilename(activePerf);
 
-        if (!blob || !blob.size) {
-          setDebug('Clip save failed: recorded file is 0 B.', true);
-          updateHeartbeat({
-            recorderState: 'error',
-            currentPerformanceId: '',
-            lastError: 'Recorded blob is empty'
-          });
-          return;
-        }
+        setDebug('Saving clip…', false);
 
-        setDebug('Saving clip… ' + Math.round(blob.size / 1024) + ' KB', false);
-
-                const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
-          updateHeartbeat({
-            recorderState: 'error',
-            currentPerformanceId: '',
-            currentCommandSeq: lastProcessedCommandSeq || 0,
-            lastError: 'Direct save failed'
-          });
-          return;
+          triggerDownload(blob, filename);
         }
 
         beaconGet({
@@ -804,9 +681,7 @@ if (!storageDirHandle) {
         recordingStartedAtMs = 0;
         els.elapsed.textContent = '';
         updateStopButton(false);
-                if (!els.debugLine || !/failed|0 B|error/i.test(els.debugLine.textContent || '')) {
-          setIdleDebug();
-        }
+        setIdleDebug();
       }
     };
 
@@ -840,9 +715,6 @@ if (!storageDirHandle) {
     });
 
     setDebug('Stopping recorder...', false);
-        try {
-      recorder.requestData();
-    } catch (e) {}
     recorder.stop();
     updateStopButton(false);
   }
