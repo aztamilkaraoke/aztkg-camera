@@ -3,7 +3,7 @@
   const FAST_POLL_MS = 1500;
   const IDLE_POLL_MS = 5000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
-  const BUILD_TAG = 'camera.js 2026-03-10 r3';
+  const BUILD_TAG = 'camera.js 2026-03-10 r4';
   console.log('AZTKG Camera build:', BUILD_TAG);
   
   let stream = null;
@@ -521,8 +521,6 @@ async function writeBlobToPickedDirectory(blob, filename) {
       true
     );
 
-    // Keep the folder armed; the handle still exists.
-    // A write failure is not the same as "storage not armed".
     storagePermission = 'granted';
     storageArmed = !!storageDirHandle;
     updateStorageUi();
@@ -707,7 +705,7 @@ if (!storageDirHandle) {
 
         setDebug('Saving clip… ' + Math.round(blob.size / 1024) + ' KB', false);
 
-                const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
         if (!wroteDirect) {
           updateHeartbeat({
             recorderState: 'error',
