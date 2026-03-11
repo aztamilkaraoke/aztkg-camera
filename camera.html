@@ -82,28 +82,38 @@
     padding:12px;
   }
 
+  .focusTopRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
 .seq{
   font-size:12px;
   font-weight:900;
   color:var(--muted);
   line-height:1.2;
   letter-spacing:.2px;
+  flex:1 1 auto;
+  min-width:0;
 }
 
 .song{
-  margin-top:8px;
+  margin-top:12px;
   font-size:22px;
-  line-height:1.12;
+  line-height:1.14;
   font-weight:900;
   word-break:break-word;
 }
 
 .singers{
-  margin-top:10px;
+  margin-top:12px;
   font-size:15px;
   font-weight:800;
   color:var(--muted);
-  line-height:1.28;
+  line-height:1.3;
 }
 
   .meta{
@@ -122,28 +132,30 @@
   }
 
 .statusWrap{
-  margin-top:16px;
+  margin-top:14px;
   display:flex;
   align-items:center;
-  justify-content:space-between;
+  justify-content:flex-start;
   gap:8px;
   flex-wrap:wrap;
+  min-height:24px;
 }
 
-  .statusPill{
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    min-height:36px;
-    padding:8px 12px;
-    border-radius:999px;
-    background:#334155;
-    border:1px solid rgba(255,255,255,.08);
-    font-size:12px;
-    font-weight:900;
-    color:#fff;
-    line-height:1.1;
-  }
+.statusPill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:28px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:#334155;
+  border:1px solid rgba(255,255,255,.08);
+  font-size:10px;
+  font-weight:900;
+  color:#fff;
+  line-height:1.1;
+  white-space:nowrap;
+}
 
   .statusPill.recording{background:var(--danger)}
   .statusPill.saving{background:var(--warn)}
@@ -231,6 +243,10 @@
       height:100vh;
     }
 
+        .focusTopRow{
+      gap:6px;
+    }
+
     .topbar{
       flex:0 0 auto;
       padding:5px 8px;
@@ -290,19 +306,19 @@
 
     .seq{
       font-size:10px;
-      line-height:1;
+      line-height:1.05;
     }
 
     .song{
-      margin-top:4px;
+      margin-top:8px;
       font-size:17px;
-      line-height:1.02;
+      line-height:1.06;
     }
 
     .singers{
-      margin-top:4px;
+      margin-top:8px;
       font-size:12.5px;
-      line-height:1.08;
+      line-height:1.12;
     }
 
     .meta{
@@ -313,15 +329,16 @@
     }
 
     .statusWrap{
-      margin-top:8px;
+      margin-top:10px;
       gap:6px;
       flex-wrap:wrap;
+      min-height:18px;
     }
 
     .statusPill{
-      min-height:28px;
-      padding:5px 8px;
-      font-size:9px;
+      min-height:22px;
+      padding:4px 7px;
+      font-size:8px;
     }
 
     .elapsed{
@@ -371,7 +388,7 @@
     }
 
 .focusCard{
-  min-height:210px;
+  min-height:190px;
   display:flex;
   flex-direction:column;
   justify-content:flex-start;
@@ -397,13 +414,17 @@
     </div>
 
     <div class="main">
-      <div class="card focusCard">
-        <div class="seq" id="seqNo">SEQ #—</div>
+            <div class="card focusCard">
+        <div class="focusTopRow">
+          <div class="seq" id="seqNo">SEQ #—</div>
+          <div class="statusPill" id="statusPill">NOT STARTED</div>
+        </div>
+
         <div class="song" id="songName">Waiting for host…</div>
         <div class="singers" id="singers">—</div>
         <div class="meta" id="meta"><div>—</div></div>
+
         <div class="statusWrap">
-          <div class="statusPill" id="statusPill">NOT STARTED</div>
           <div class="elapsed" id="elapsed"></div>
         </div>
       </div>
