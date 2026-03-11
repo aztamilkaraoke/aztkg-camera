@@ -331,62 +331,103 @@
     els.btnEmergencyStop.style.cursor = isRecording ? 'pointer' : 'not-allowed';
   }
 
-  function applyFocus(perf) {
+  function applyFocus(perf, mode) {
+    const isRecording = mode === 'recording';
+
     if (!perf) {
-      setTop(els.seqNo, '#—');
-      setTop(els.songName, 'Waiting for next song');
-      setTop(els.singers, '');
-      setTop(els.meta, '');
-      setTop(els.statusPill, 'IDLE');
-      els.statusPill.className = 'statusPill idle';
+      els.seqNo.textContent = '';
+
+      if (lastMode === 'ENDED') {
+        els.songName.textContent = 'Meet ended — thanks for singing!';
+        els.statusPill.textContent = 'MEET ENDED';
+      } else if (lastMode === 'SPLASH') {
+        els.songName.textContent = 'Waiting for host to start the meet…';
+        els.statusPill.textContent = 'NOT STARTED';
+      } else {
+        els.songName.textContent = 'Meet is live — waiting for next song…';
+        els.statusPill.textContent = 'WAITING';
+      }
+
+      els.singers.textContent = '';
+      els.meta.innerHTML = '<div>—</div>';
+      els.statusPill.className = 'statusPill';
       els.elapsed.textContent = '';
       setRecordingUiCompact(false);
       updateStopButton(false);
       return;
     }
 
-    setTop(els.seqNo, '#' + (perf.seqNo || '—'));
-    setTop(els.songName, perf.songName || 'Untitled Song');
-    setTop(els.singers, (perf.singers || []).join(' • '));
-    setTop(els.meta, buildMetaLines(perf).join(' • '));
-    setTop(els.statusPill, 'RECORDING');
-    els.statusPill.className = 'statusPill rec';
-    setRecordingUiCompact(true);
-    updateStopButton(true);
-  }
+    // Keep seq on screen if you want visual reference, but not in filename
+    els.seqNo.textContent = perf.seqNo ? ('SEQ #' + perf.seqNo) : '';
+    els.songName.textContent = perf.songName || '—';
+    els.singers.textContent = (perf.singers || []).join(' & ') || '—';
 
-  function applyRecent(recent) {
-    if (!recent || !recent.length) {
-      setTop(els.recentText, 'No recent clips yet');
-      return;
+    const metaLines = buildMetaLines(perf);
+    els.meta.innerHTML = metaLines.length
+      ? metaLines.map(x => '<div>' + escapeHtml(x) + '</div>').join('')
+      : '<div>—</div>';
+
+    if (mode === 'recording') {
+      els.statusPill.textContent = 'RECORDING IN PROGRESS';
+      els.statusPill.className = 'statusPill recording';
+    } else if (mode === 'saving') {
+      els.statusPill.textContent = 'SAVING';
+      els.statusPill.className = 'statusPill saving';
+    } else {
+      els.statusPill.textContent = 'NOT STARTED';
+      els.statusPill.className = 'statusPill';
+      els.elapsed.textContent = '';
     }
 
-    const out = recent.slice(0, 6).map(function(x) {
-      const seq = x.seqNo ? ('#' + x.seqNo + ' ') : '';
-      const song = x.songName || 'Untitled';
-      const file = x.savedFileName ? (' → ' + x.savedFileName) : '';
-      return seq + song + file;
-    });
-
-    els.recentText.innerHTML = escapeHtml(out.join('\n')).replace(/\n/g, '<br>');
+    setRecordingUiCompact(isRecording);
+    updateStopButton(isRecording);
   }
 
   function applyState(st) {
-    const mode = st && st.mode ? st.mode : 'SPLASH';
+    const display = st && st.performanceDisplay ? st.performanceDisplay : {};
+    const cameraStatus = st && st.cameraStatus ? st.cameraStatus : {};
+    const current = display.current || null;
+    const upcoming = display.upcoming || null;
+    const lastRecorded = display.lastRecorded || null;
+    const mode = (st && st.mode) ? st.mode : 'SPLASH';
+    const isActive = !!current || mode === 'LIVE';
+    restartPollLoop(isActive);
+
     lastMode = mode;
 
-    if (mode === 'ACTIVE' && st.currentPerformance) {
-      setTop(els.recState, 'Recorder: Recording');
-      applyFocus(st.currentPerformance);
-      restartPollLoop(true);
-      return;
-    }
+    setTop(els.recState, 'Recorder: ' + (cameraStatus.recorderState || '—'));
 
-    setTop(els.recState, 'Recorder: Idle');
-    applyFocus(null);
-    applyRecent(st && st.recentClips ? st.recentClips : []);
-    restartPollLoop(false);
-    setIdleDebug();
+    if (mode === 'SPLASH') {
+      applyFocus(null, 'idle');
+      setIdleDebug();
+    } else if (mode === 'ENDED') {
+      applyFocus(null, 'idle');
+      setIdleDebug();
+    } else {
+      const focusMode = current
+        ? (current.status === 'saving' ? 'saving' : 'recording')
+        : 'idle';
+
+      applyFocus(current || upcoming, focusMode);
+
+      if (current) {
+        if (current.status === 'saving') {
+          setDebug('Saving clip…', false);
+        } else {
+          setDebug('Recording in progress…', false);
+        }
+      } else if (upcoming) {
+        setDebug('Meet is live — next song is loaded.', false);
+      } else {
+        setIdleDebug();
+      }
+    }
+    if (lastRecorded) {
+      const seq = lastRecorded.seqNo ? ('SEQ #' + lastRecorded.seqNo) : '';
+      els.recentText.textContent = (seq ? seq + ' - ' : '') + (lastRecorded.songName || '—');
+    } else {
+      els.recentText.textContent = '—';
+    }
   }
 
   function buildFilename(perf) {
@@ -405,106 +446,34 @@
       .replace(/[\/\\:*?"<>|]/g, '-')
       .replace(/\s+/g, ' ')
       .replace(/\.+$/g, '')
-      .trim() || 'AZTKG Recording';
+      .trim();
 
     return base + '.' + chosenExt;
   }
 
-  function isPermissionError(err) {
-    const msg = String(err && (err.message || err.name) || err || '').toLowerCase();
-    return (
-      msg.includes('notallowederror') ||
-      msg.includes('permission') ||
-      msg.includes('denied') ||
-      msg.includes('securityerror')
-    );
+async function writeBlobToPickedDirectory(blob, filename) {
+  if (!storageDirHandle || !storageArmed) return false;
+
+  try {
+    const perm = await verifyDirectoryPermission(storageDirHandle, false);
+    storagePermission = perm;
+    storageArmed = perm === 'granted';
+    updateStorageUi();
+
+    if (!storageArmed) return false;
+
+    const fileHandle = await storageDirHandle.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return true;
+  } catch (e) {
+    storagePermission = 'prompt';
+    storageArmed = false;
+    updateStorageUi();
+    return false;
   }
-
-  function buildUniqueFilename(perf) {
-    const singerPart = (perf.singers || []).join(' & ');
-
-    const base = [
-      perf.songName,
-      singerPart,
-      perf.songType,
-      perf.meetName,
-      perf.movieName,
-      perf.composerName
-    ]
-      .filter(Boolean)
-      .join(' - ')
-      .replace(/[\/\\:*?"<>|]/g, '-')
-      .replace(/\s+/g, ' ')
-      .replace(/\.+$/g, '')
-      .trim() || 'AZTKG Recording';
-
-    const ts = new Date().toISOString()
-      .replace(/[:.]/g, '-')
-      .replace('T',' ')
-      .replace('Z',' UTC');
-
-    return base + ' - ' + ts + '.' + chosenExt;
-  }
-
-  async function writeBlobToPickedDirectory(blob, filename) {
-    if (!storageDirHandle || !storageArmed) {
-      return { ok:false, reason:'not-armed' };
-    }
-
-    let writable = null;
-
-    try {
-      const perm = await verifyDirectoryPermission(storageDirHandle, false);
-      storagePermission = perm;
-      storageArmed = perm === 'granted';
-
-      updateStorageUi();
-
-      if (!storageArmed) {
-        return { ok:false, reason:'permission-not-granted' };
-      }
-
-      const fileHandle =
-        await storageDirHandle.getFileHandle(filename, { create:true });
-
-      writable =
-        await fileHandle.createWritable({ keepExistingData:false });
-
-      await writable.write({
-        type:'write',
-        position:0,
-        data:blob
-      });
-
-      await writable.truncate(blob.size);
-
-      await writable.close();
-      writable = null;
-
-      return { ok:true, filename:filename };
-    }
-    catch(e) {
-      try {
-        if (writable) {
-          await writable.abort();
-        }
-      } catch(_) {}
-
-      if (isPermissionError(e)) {
-        storagePermission = 'prompt';
-        storageArmed = false;
-        updateStorageUi();
-      } else {
-        updateStorageUi();
-      }
-
-      return {
-        ok:false,
-        reason:'write-error',
-        error:String(e && (e.message || e.name) || e || 'Unknown write error')
-      };
-    }
-  }
+}
 
   function triggerDownload(blob, filename) {
     const a = document.createElement('a');
@@ -669,23 +638,13 @@ function updateHeartbeat(extra) {
     recorder.onstop = async function() {
       try {
         const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
-        const filename = buildUniqueFilename(activePerf);
+        const filename = buildFilename(activePerf);
 
         setDebug('Saving clip…', false);
 
-        const saveResult = await writeBlobToPickedDirectory(blob, filename);
-
-        if (!saveResult.ok) {
-          setDebug(
-            'Direct save failed: ' +
-            (saveResult.error || saveResult.reason || 'Unknown') +
-            ' — falling back to download.',
-            true
-          );
-
+        const wroteDirect = await writeBlobToPickedDirectory(blob, filename);
+        if (!wroteDirect) {
           triggerDownload(blob, filename);
-        } else {
-          setDebug('Clip saved.', false);
         }
 
         beaconGet({
