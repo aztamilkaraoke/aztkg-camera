@@ -384,11 +384,15 @@ renderClipPanel();
       .replace(/\.+$/g, '')
       .trim() || 'AZTKG Recording';
 
-    const ts = new Date().toISOString()
-      .replace(/[:.]/g, '-')
-      .replace('T', ' ')
-      .replace('Z', ' UTC');
-
+const d = new Date();
+const ts =
+  d.getFullYear() + '-' +
+  String(d.getMonth() + 1).padStart(2, '0') + '-' +
+  String(d.getDate()).padStart(2, '0') + ' ' +
+  String(d.getHours()).padStart(2, '0') + '-' +
+  String(d.getMinutes()).padStart(2, '0') + '-' +
+  String(d.getSeconds()).padStart(2, '0');
+    
     return base + ' - ' + ts + '.' + chosenExt;
   }
 
@@ -469,11 +473,13 @@ renderClipPanel();
       );
     });
 
-    els.recentText.innerHTML =
-      '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
-      opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
-      '</div>' +
-      rows.join('');
+els.recentText.innerHTML =
+  '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
+    opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
+  '</div>' +
+  '<div style="max-height:240px;overflow-y:auto;padding-right:4px">' +
+    rows.join('') +
+  '</div>';
   }
 
   async function writeBlobToOpfs(blob, filename) {
@@ -497,41 +503,6 @@ renderClipPanel();
   }
 
   async function exportAllClips() {
-    if (!window.showDirectoryPicker) {
-      setDebug('Folder export is not supported in this browser.', true);
-      return false;
-    }
-
-    if (!opfsClipIndex.length) {
-      setDebug('No clips available to export.', true);
-      return false;
-    }
-
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    const clipsDir = await getOpfsClipsDir();
-
-    let done = 0;
-
-    for (const item of opfsClipIndex) {
-      const srcHandle = await clipsDir.getFileHandle(item.name, { create: false });
-      const srcFile = await srcHandle.getFile();
-      const outHandle = await dirHandle.getFileHandle(item.name, { create: true });
-      const writable = await outHandle.createWritable();
-
-      try {
-        await writable.write(srcFile);
-        await writable.close();
-        done++;
-        setDebug('Exporting clips… ' + done + '/' + opfsClipIndex.length, false);
-      } catch (e) {
-        try { await writable.abort(); } catch (_) {}
-        throw e;
-      }
-    }
-
-    setDebug('Export complete. ' + done + ' clip' + (done === 1 ? '' : 's') + ' exported.', false);
-    return true;
-  }
 
   function triggerDownload(blob, filename) {
     const a = document.createElement('a');
