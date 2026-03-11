@@ -220,10 +220,10 @@
   }
 
   function setRecordingUiCompact(isRecording) {
-  const songSize = isRecording ? '20px' : '24px';
-  const singerSize = isRecording ? '14px' : '16px';
+  const songSize = isRecording ? '20px' : '25px';
+  const singerSize = isRecording ? '14px' : '17px';
   const metaSize = '0px';
-  const statusPad = isRecording ? '8px 12px' : '10px 14px';
+  const statusPad = isRecording ? '5px 10px' : '5px 10px';
 
   if (els.songName) els.songName.style.fontSize = songSize;
   if (els.singers) els.singers.style.fontSize = singerSize;
@@ -247,7 +247,7 @@ function applyFocus(perf, mode) {
 
     if (lastMode === 'ENDED') {
       els.songName.textContent = 'Meet ended — thanks for singing!';
-      els.statusPill.textContent = 'MEET ENDED';
+      els.statusPill.textContent = 'ENDED';
     } else if (lastMode === 'SPLASH') {
       els.songName.textContent = 'Waiting for host to start the meet…';
       els.statusPill.textContent = 'NOT STARTED';
@@ -272,11 +272,10 @@ function applyFocus(perf, mode) {
   els.seqNo.textContent = headerBits.join(' · ');
   els.songName.textContent = perf.songName || '—';
   els.singers.textContent = (perf.singers || []).join(' & ') || '—';
-
   els.meta.innerHTML = '';
 
   if (mode === 'recording') {
-    els.statusPill.textContent = 'RECORDING IN PROGRESS';
+    els.statusPill.textContent = 'RECORDING';
     els.statusPill.className = 'statusPill recording';
   } else if (mode === 'saving') {
     els.statusPill.textContent = 'SAVING';
