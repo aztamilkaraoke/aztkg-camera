@@ -72,13 +72,13 @@
   }
 
   function chooseMime() {
-    const prefs = [
-      'video/mp4;codecs=avc1,mp4a.40.2',
-      'video/mp4',
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm'
-    ];
+const prefs = [
+  'video/webm;codecs=vp9,opus',
+  'video/webm;codecs=vp8,opus',
+  'video/webm',
+  'video/mp4;codecs=avc1,mp4a.40.2',
+  'video/mp4'
+];
 
     for (const m of prefs) {
       try {
@@ -192,7 +192,7 @@ function updateStorageUi() {
     return;
   }
 
-  if (storageDirHandle && storagePermission === 'granted') {
+  if (storageArmed && storageDirHandle) {
     setTop(els.storageState, 'Storage: Ready');
     return;
   }
@@ -296,85 +296,66 @@ function updateStorageUi() {
     }
   }
 
-  async function armStorage() {
-    if (!window.showDirectoryPicker) {
-      setDebug('This browser does not support folder-based silent saves.', true);
-      updateStorageUi();
-      return false;
-    }
+async function armStorage() {
+  if (!window.showDirectoryPicker) {
+    setDebug('This browser does not support folder-based silent saves.', true);
+    updateStorageUi();
+    return false;
+  }
+
+  try {
+    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const key = 'aztkg-storage-dir-v1';
+
+    await idbKeyval.set(key, dirHandle);
+    localStorage.setItem('aztkg.camera.storage.dirHandle', key);
+
+    storageDirHandle = dirHandle;
+    storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
+    storageArmed = !!storageDirHandle;
 
     try {
-      const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-      const key = 'aztkg-storage-dir-v1';
-      await idbKeyval.set(key, dirHandle);
-      localStorage.setItem('aztkg.camera.storage.dirHandle', key);
+      await probeDirectoryWrite(storageDirHandle);
 
-      storageDirHandle = dirHandle;
-      storagePermission = await verifyDirectoryPermission(storageDirHandle, true);
-      storageArmed = !!storageDirHandle;
-
-      try {
-  await probeDirectoryWrite(storageDirHandle);
-  storagePermission = 'granted';
-  storageArmed = true;
-  updateStorageUi();
-
-  updateHeartbeat({
-    storageArmed: '1',
-    storagePermission: 'granted'
-  });
-
-  setDebug('Storage armed. Probe write succeeded.', false);
-  return true;
-} catch (e) {
-  console.error('Probe write failed:', e);
-
-  storagePermission = 'prompt';
-  storageArmed = false;
-  storageDirHandle = null;
-  updateStorageUi();
-
-  updateHeartbeat({
-    storageArmed: '0',
-    storagePermission: 'prompt'
-  });
-
-  setDebug(
-    'Selected folder is not writable here: ' + (e && e.name ? e.name : 'unknown error'),
-    true
-  );
-  return false;
-}
-
-      try {
-  await probeDirectoryWrite(storageDirHandle);
-  storagePermission = 'granted';
-  storageArmed = true;
-  updateStorageUi();
-  setDebug('Storage armed. Probe write succeeded.', false);
-} catch (e) {
-  console.error('Probe write failed:', e);
-  storagePermission = 'prompt';
-  storageArmed = false;
-  storageDirHandle = null;
-  updateStorageUi();
-  setDebug(
-    'Selected folder is not writable here: ' +
-    (e && e.name ? e.name : 'unknown error'),
-    true
-  );
-  return false;
-}
-
-      return storageArmed;
-    } catch (e) {
-      storageArmed = false;
-      storagePermission = 'prompt';
+      storagePermission = 'granted';
+      storageArmed = true;
       updateStorageUi();
-      setDebug('Storage arm cancelled.', true);
+
+      updateHeartbeat({
+        storageArmed: '1',
+        storagePermission: 'granted'
+      });
+
+      setDebug('Storage armed. Probe write succeeded.', false);
+      return true;
+    } catch (e) {
+      console.error('Probe write failed:', e);
+
+      storagePermission = 'prompt';
+      storageArmed = false;
+      storageDirHandle = null;
+      updateStorageUi();
+
+      updateHeartbeat({
+        storageArmed: '0',
+        storagePermission: 'prompt'
+      });
+
+      setDebug(
+        'Selected folder is not writable here: ' +
+        (e && e.name ? e.name : 'unknown error'),
+        true
+      );
       return false;
     }
+  } catch (e) {
+    storageArmed = false;
+    storagePermission = 'prompt';
+    updateStorageUi();
+    setDebug('Storage arm cancelled.', true);
+    return false;
   }
+}
 
   function buildMetaLines(perf) {
     const lines = [];
