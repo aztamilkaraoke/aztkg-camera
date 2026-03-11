@@ -399,6 +399,7 @@ const ts =
   async function loadOpfsClipIndex() {
     try {
       const clipsDir = await getOpfsClipsDir();
+      const metaMap = loadClipMetaMap();
       const out = [];
 
       for await (const [name, handle] of clipsDir.entries()) {
@@ -406,11 +407,14 @@ const ts =
 
         try {
           const file = await handle.getFile();
-          out.push({
-            name: name,
-            size: file.size || 0,
-            modifiedMs: file.lastModified || 0
-          });
+
+
+out.push({
+  name: name,
+  size: file.size || 0,
+  modifiedMs: file.lastModified || 0,
+  displayLabel: (metaMap[name] && metaMap[name].displayLabel) || name
+});
         } catch (e) {}
       }
 
@@ -434,6 +438,41 @@ const ts =
     return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
   }
 
+  function loadClipMetaMap() {
+  try {
+    return JSON.parse(localStorage.getItem('aztkg.camera.clipMeta') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveClipMetaMap(map) {
+  localStorage.setItem('aztkg.camera.clipMeta', JSON.stringify(map));
+}
+
+function rememberClipMeta(filename, perf) {
+  const map = loadClipMetaMap();
+  const seq = perf && perf.seqNo ? ('SEQ #' + perf.seqNo + ' - ') : '';
+  const song = perf && perf.songName ? perf.songName : 'Untitled Song';
+
+  map[filename] = {
+    displayLabel: seq + song
+  };
+
+  saveClipMetaMap(map);
+}
+
+function forgetClipMeta(filename) {
+  const map = loadClipMetaMap();
+  delete map[filename];
+  saveClipMetaMap(map);
+}
+
+function getSelectedClipName() {
+  const sel = els.recentText ? els.recentText.querySelector('#clipPicker') : null;
+  return sel ? decodeURIComponent(sel.value || '') : '';
+}
+
   async function downloadOpfsClip(name) {
     const clipsDir = await getOpfsClipsDir();
     const fileHandle = await clipsDir.getFileHandle(name, { create: false });
@@ -444,46 +483,45 @@ const ts =
   async function deleteOpfsClip(name) {
     const clipsDir = await getOpfsClipsDir();
     await clipsDir.removeEntry(name);
+    forgetClipMeta(name);
     await loadOpfsClipIndex();
     renderClipPanel();
   }
 
-  function renderClipPanel() {
-    if (!els.recentText) return;
+function renderClipPanel() {
+  if (!els.recentText) return;
 
-    if (!opfsClipIndex.length) {
-      els.recentText.innerHTML = 'No clips saved yet';
-      return;
-    }
-
-    const visibleClips = opfsClipIndex.slice(0, 8);
-
-const rows = visibleClips.map(function(item, idx) {
-      return (
-        '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08)">' +
-          '<div style="font-weight:800;color:#f8fafc;word-break:break-word">' +
-            escapeHtml(item.name) +
-          '</div>' +
-          '<div style="margin-top:2px;font-size:11px;color:#94a3b8">' +
-            escapeHtml(formatBytes(item.size)) +
-          '</div>' +
-          '<div style="margin-top:4px;display:flex;gap:10px;flex-wrap:wrap">' +
-            '<a href="#" data-opfs-download="' + encodeURIComponent(item.name) + '" style="color:#93c5fd;text-decoration:none;font-weight:800">Download</a>' +
-            '<a href="#" data-opfs-delete="' + encodeURIComponent(item.name) + '" style="color:#fca5a5;text-decoration:none;font-weight:800">Delete</a>' +
-          '</div>' +
-        '</div>'
-      );
-    });
-
-els.recentText.innerHTML =
-  '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
-    opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
-    (opfsClipIndex.length > 8 ? ' · showing latest 8' : '') +
-  '</div>' +
-  '<div style="max-height:220px;overflow-y:auto;padding-right:4px">' +
-    rows.join('') +
-  '</div>';
+  if (!opfsClipIndex.length) {
+    els.recentText.innerHTML = 'No clips saved yet';
+    return;
   }
+
+  const options = opfsClipIndex.map(function(item) {
+    return (
+      '<option value="' + encodeURIComponent(item.name) + '">' +
+        escapeHtml(item.displayLabel || item.name) +
+      '</option>'
+    );
+  }).join('');
+
+  const first = opfsClipIndex[0];
+
+  els.recentText.innerHTML =
+    '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
+      opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
+    '</div>' +
+    '<select id="clipPicker" ' +
+      'style="width:100%;padding:10px 12px;border-radius:10px;background:#111827;color:#f8fafc;border:1px solid rgba(255,255,255,.12);font-weight:700">' +
+      options +
+    '</select>' +
+    '<div id="clipPickerMeta" style="margin-top:6px;font-size:11px;color:#94a3b8">' +
+      escapeHtml(formatBytes(first.size)) +
+    '</div>' +
+    '<div style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap">' +
+      '<a href="#" data-opfs-download-selected="1" style="color:#93c5fd;text-decoration:none;font-weight:800">Download Selected</a>' +
+      '<a href="#" data-opfs-delete-selected="1" style="color:#fca5a5;text-decoration:none;font-weight:800">Delete Selected</a>' +
+    '</div>';
+}
 
   async function writeBlobToOpfs(blob, filename) {
     const clipsDir = await getOpfsClipsDir();
@@ -506,11 +544,6 @@ els.recentText.innerHTML =
   }
 
 async function exportAllClips() {
-  if (!window.showDirectoryPicker) {
-    setDebug('Folder export is not supported in this browser.', true);
-    return false;
-  }
-
   await loadOpfsClipIndex();
 
   if (!opfsClipIndex.length) {
@@ -518,44 +551,20 @@ async function exportAllClips() {
     return false;
   }
 
-  const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  const clipsDir = await getOpfsClipsDir();
-  const names = opfsClipIndex.map(function(item) { return item.name; });
-
   let done = 0;
 
-  for (const name of names) {
-    let writable = null;
-
+  for (const item of opfsClipIndex) {
     try {
-      const srcHandle = await clipsDir.getFileHandle(name, { create: false });
-      const srcFile = await srcHandle.getFile();
-      const bytes = await srcFile.arrayBuffer();
-
-      const outHandle = await dirHandle.getFileHandle(name, { create: true });
-      writable = await outHandle.createWritable({ keepExistingData: false });
-
-      await writable.write({
-        type: 'write',
-        position: 0,
-        data: bytes
-      });
-
-      await writable.truncate(bytes.byteLength);
-      await writable.close();
-      writable = null;
-
+      await downloadOpfsClip(item.name);
       done++;
-      setDebug('Exporting clips… ' + done + '/' + names.length, false);
-    } catch (e) {
-      try {
-        if (writable) {
-          await writable.abort();
-        }
-      } catch (_) {}
+      setDebug('Starting downloads… ' + done + '/' + opfsClipIndex.length, false);
 
+      await new Promise(function(resolve) {
+        setTimeout(resolve, 350);
+      });
+    } catch (e) {
       setDebug(
-        'Export failed on clip ' + (done + 1) + '/' + names.length + ': ' +
+        'Download-all failed on clip ' + (done + 1) + '/' + opfsClipIndex.length + ': ' +
         String(e && (e.message || e.name) || e || 'Unknown error'),
         true
       );
@@ -564,7 +573,7 @@ async function exportAllClips() {
   }
 
   setDebug(
-    'Export complete. ' + done + ' clip' + (done === 1 ? '' : 's') + ' exported.',
+    'Download started for ' + done + ' clip' + (done === 1 ? '' : 's') + '.',
     false
   );
   return true;
@@ -728,9 +737,10 @@ function startRecording(perf, commandSeq) {
         setDebug('Internal save failed: ' + (saveResult.error || 'Unknown error'), true);
         triggerDownload(blob, filename);
       } else {
-        setDebug('Clip saved to internal storage.', false);
-        await loadOpfsClipIndex();
-        renderClipPanel();
+      setDebug('Clip saved to internal storage.', false);
+      rememberClipMeta(filename, activePerf);
+      await loadOpfsClipIndex();
+      renderClipPanel();
       }
 
       beaconGet({
@@ -892,29 +902,52 @@ function startRecording(perf, commandSeq) {
     poll();
   });
 
-  els.recentText.addEventListener('click', async function(evt){
-    const dl = evt.target.closest('[data-opfs-download]');
-    if (dl) {
-      evt.preventDefault();
-      try {
-        await downloadOpfsClip(decodeURIComponent(dl.getAttribute('data-opfs-download')));
-      } catch (e) {
-        setDebug('Download failed.', true);
-      }
-      return;
-    }
+els.recentText.addEventListener('change', function(evt){
+  const sel = evt.target.closest('#clipPicker');
+  if (!sel) return;
 
-    const del = evt.target.closest('[data-opfs-delete]');
-    if (del) {
-      evt.preventDefault();
-      try {
-        await deleteOpfsClip(decodeURIComponent(del.getAttribute('data-opfs-delete')));
-        setDebug('Clip deleted.', false);
-      } catch (e) {
-        setDebug('Delete failed.', true);
+  const name = decodeURIComponent(sel.value || '');
+  const item = opfsClipIndex.find(function(x) { return x.name === name; });
+  const meta = els.recentText.querySelector('#clipPickerMeta');
+
+  if (item && meta) {
+    meta.textContent = formatBytes(item.size);
+  }
+});
+  
+els.recentText.addEventListener('click', async function(evt){
+  const dlSelected = evt.target.closest('[data-opfs-download-selected]');
+  if (dlSelected) {
+    evt.preventDefault();
+    try {
+      const name = getSelectedClipName();
+      if (!name) {
+        setDebug('No clip selected.', true);
+        return;
       }
+      await downloadOpfsClip(name);
+    } catch (e) {
+      setDebug('Download failed.', true);
     }
-  });
+    return;
+  }
+
+  const delSelected = evt.target.closest('[data-opfs-delete-selected]');
+  if (delSelected) {
+    evt.preventDefault();
+    try {
+      const name = getSelectedClipName();
+      if (!name) {
+        setDebug('No clip selected.', true);
+        return;
+      }
+      await deleteOpfsClip(name);
+      setDebug('Clip deleted.', false);
+    } catch (e) {
+      setDebug('Delete failed.', true);
+    }
+  }
+});
 
   initMedia()
     .then(async function(){
