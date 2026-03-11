@@ -502,7 +502,57 @@ els.recentText.innerHTML =
     }
   }
 
-  async function exportAllClips() {
+    async function exportAllClips() {
+    if (!window.showDirectoryPicker) {
+      setDebug('Folder export is not supported in this browser.', true);
+      return false;
+    }
+
+    await loadOpfsClipIndex();
+
+    if (!opfsClipIndex.length) {
+      setDebug('No clips available to export.', true);
+      return false;
+    }
+
+    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const clipsDir = await getOpfsClipsDir();
+    const names = opfsClipIndex.map(function(item) { return item.name; });
+
+    let done = 0;
+
+    for (const name of names) {
+      const srcHandle = await clipsDir.getFileHandle(name, { create: false });
+      const srcFile = await srcHandle.getFile();
+      const bytes = await srcFile.arrayBuffer();
+
+      let writable = null;
+
+      try {
+        const outHandle = await dirHandle.getFileHandle(name, { create: true });
+        writable = await outHandle.createWritable({ keepExistingData: false });
+        await writable.write(bytes);
+        await writable.truncate(bytes.byteLength);
+        await writable.close();
+        writable = null;
+
+        done++;
+        setDebug('Exporting clips… ' + done + '/' + names.length, false);
+      } catch (e) {
+        try {
+          if (writable) await writable.abort();
+        } catch (_) {}
+
+        throw e;
+      }
+    }
+
+    setDebug(
+      'Export complete. ' + done + ' clip' + (done === 1 ? '' : 's') + ' exported.',
+      false
+    );
+    return true;
+  }
 
   function triggerDownload(blob, filename) {
     const a = document.createElement('a');
