@@ -27,6 +27,7 @@
   let lastSavedOpfsName = '';
   let lastSavedOpfsBlob = null;
   const OPFS_CLIPS_DIR = 'clips';
+  let opfsClipIndex = [];
 
   const els = {
     camReady: document.getElementById('camReady'),
@@ -188,16 +189,16 @@
     }
   };
 
-    function updateStorageUi() {
-  if (!els.storageState) return;
+      function updateStorageUi() {
+    if (!els.storageState) return;
 
-  if (navigator.storage && navigator.storage.getDirectory) {
-    setTop(els.storageState, 'Storage: Internal Ready');
-    return;
+    if (navigator.storage && navigator.storage.getDirectory) {
+      setTop(els.storageState, 'Storage: Internal Ready');
+      return;
+    }
+
+    setTop(els.storageState, 'Storage: Unsupported');
   }
-
-  setTop(els.storageState, 'Storage: Unsupported');
-}
 
   async function verifyDirectoryPermission(dirHandle, ask) {
     if (!dirHandle) return 'prompt';
@@ -256,11 +257,20 @@
     }
   }
 
-async function armStorage() {
-  updateStorageUi();
-  setDebug('Using internal storage for clips. Folder arm is not required.', false);
-  return true;
-}
+  async function armStorage() {
+    try {
+      await loadOpfsClipIndex();
+      renderClipPanel();
+      await exportAllClips();
+      return true;
+    } catch (e) {
+      setDebug(
+        'Export failed: ' + String(e && (e.message || e.name) || e || 'Unknown error'),
+        true
+      );
+      return false;
+    }
+  }
 
   function buildMetaLines(perf) {
     const lines = [];
@@ -382,12 +392,7 @@ async function armStorage() {
         setIdleDebug();
       }
     }
-    if (lastRecorded) {
-      const seq = lastRecorded.seqNo ? ('SEQ #' + lastRecorded.seqNo) : '';
-      els.recentText.textContent = (seq ? seq + ' - ' : '') + (lastRecorded.songName || '—');
-    } else {
-      els.recentText.textContent = '—';
-    }
+renderClipPanel();
   }
 
   function buildFilename(perf) {
@@ -409,6 +414,185 @@ async function armStorage() {
       .trim();
 
     return base + '.' + chosenExt;
+  }
+
+    async function getOpfsClipsDir() {
+    if (!navigator.storage || !navigator.storage.getDirectory) {
+      throw new Error('Internal storage is not supported in this browser');
+    }
+
+    if (!opfsRootHandle) {
+      opfsRootHandle = await navigator.storage.getDirectory();
+    }
+
+    return await opfsRootHandle.getDirectoryHandle(OPFS_CLIPS_DIR, { create: true });
+  }
+
+  function buildUniqueFilename(perf) {
+    const singerPart = (perf.singers || []).join(' & ');
+
+    const base = [
+      perf.songName,
+      singerPart,
+      perf.songType,
+      perf.meetName,
+      perf.movieName,
+      perf.composerName
+    ]
+      .filter(Boolean)
+      .join(' - ')
+      .replace(/[\/\\:*?"<>|]/g, '-')
+      .replace(/\s+/g, ' ')
+      .replace(/\.+$/g, '')
+      .trim() || 'AZTKG Recording';
+
+    const ts = new Date().toISOString()
+      .replace(/[:.]/g, '-')
+      .replace('T', ' ')
+      .replace('Z', ' UTC');
+
+    return base + ' - ' + ts + '.' + chosenExt;
+  }
+
+  async function loadOpfsClipIndex() {
+    try {
+      const clipsDir = await getOpfsClipsDir();
+      const out = [];
+
+      for await (const [name, handle] of clipsDir.entries()) {
+        if (!handle || handle.kind !== 'file') continue;
+
+        try {
+          const file = await handle.getFile();
+          out.push({
+            name: name,
+            size: file.size || 0,
+            modifiedMs: file.lastModified || 0
+          });
+        } catch (e) {}
+      }
+
+      out.sort(function(a, b) {
+        return (b.modifiedMs || 0) - (a.modifiedMs || 0);
+      });
+
+      opfsClipIndex = out;
+      return out;
+    } catch (e) {
+      opfsClipIndex = [];
+      return [];
+    }
+  }
+
+  function formatBytes(bytes) {
+    const n = Number(bytes || 0);
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  async function downloadOpfsClip(name) {
+    const clipsDir = await getOpfsClipsDir();
+    const fileHandle = await clipsDir.getFileHandle(name, { create: false });
+    const file = await fileHandle.getFile();
+    triggerDownload(file, name);
+  }
+
+  async function deleteOpfsClip(name) {
+    const clipsDir = await getOpfsClipsDir();
+    await clipsDir.removeEntry(name);
+    await loadOpfsClipIndex();
+    renderClipPanel();
+  }
+
+  function renderClipPanel() {
+    if (!els.recentText) return;
+
+    if (!opfsClipIndex.length) {
+      els.recentText.innerHTML = 'No clips saved yet';
+      return;
+    }
+
+    const rows = opfsClipIndex.map(function(item, idx) {
+      return (
+        '<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08)">' +
+          '<div style="font-weight:800;color:#f8fafc;word-break:break-word">' +
+            escapeHtml(item.name) +
+          '</div>' +
+          '<div style="margin-top:2px;font-size:11px;color:#94a3b8">' +
+            escapeHtml(formatBytes(item.size)) +
+          '</div>' +
+          '<div style="margin-top:4px;display:flex;gap:10px;flex-wrap:wrap">' +
+            '<a href="#" data-opfs-download="' + encodeURIComponent(item.name) + '" style="color:#93c5fd;text-decoration:none;font-weight:800">Download</a>' +
+            '<a href="#" data-opfs-delete="' + encodeURIComponent(item.name) + '" style="color:#fca5a5;text-decoration:none;font-weight:800">Delete</a>' +
+          '</div>' +
+        '</div>'
+      );
+    });
+
+    els.recentText.innerHTML =
+      '<div style="margin-bottom:8px;color:#94a3b8;font-size:11px;font-weight:800">' +
+      opfsClipIndex.length + ' clip' + (opfsClipIndex.length === 1 ? '' : 's') + ' saved internally' +
+      '</div>' +
+      rows.join('');
+  }
+
+  async function writeBlobToOpfs(blob, filename) {
+    const clipsDir = await getOpfsClipsDir();
+    const fileHandle = await clipsDir.getFileHandle(filename, { create: true });
+    const writable = await fileHandle.createWritable();
+
+    try {
+      await writable.write(blob);
+      await writable.close();
+      await loadOpfsClipIndex();
+      renderClipPanel();
+      return { ok: true, filename: filename };
+    } catch (e) {
+      try { await writable.abort(); } catch (_) {}
+      return {
+        ok: false,
+        error: String(e && (e.message || e.name) || e || 'Internal save failed')
+      };
+    }
+  }
+
+  async function exportAllClips() {
+    if (!window.showDirectoryPicker) {
+      setDebug('Folder export is not supported in this browser.', true);
+      return false;
+    }
+
+    if (!opfsClipIndex.length) {
+      setDebug('No clips available to export.', true);
+      return false;
+    }
+
+    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const clipsDir = await getOpfsClipsDir();
+
+    let done = 0;
+
+    for (const item of opfsClipIndex) {
+      const srcHandle = await clipsDir.getFileHandle(item.name, { create: false });
+      const srcFile = await srcHandle.getFile();
+      const outHandle = await dirHandle.getFileHandle(item.name, { create: true });
+      const writable = await outHandle.createWritable();
+
+      try {
+        await writable.write(srcFile);
+        await writable.close();
+        done++;
+        setDebug('Exporting clips… ' + done + '/' + opfsClipIndex.length, false);
+      } catch (e) {
+        try { await writable.abort(); } catch (_) {}
+        throw e;
+      }
+    }
+
+    setDebug('Export complete. ' + done + ' clip' + (done === 1 ? '' : 's') + ' exported.', false);
+    return true;
   }
 
   async function getOpfsClipsDir() {
@@ -624,109 +808,111 @@ function updateHeartbeat(extra) {
   beaconGet(params);
 }
 
-  function startRecording(perf, commandSeq) {
-    if (!stream) return;
-    if (recorder && recorder.state === 'recording') {
-      lastProcessedCommandSeq = commandSeq;
-      return;
-    }
+function startRecording(perf, commandSeq) {
+  if (!stream) return;
 
-    chunks = [];
-    activePerf = perf;
-    activePerfStartedAtIso = perf && perf.startedAt ? perf.startedAt : '';
-    recordingStartedAtMs = activePerfStartedAtIso
-      ? new Date(activePerfStartedAtIso).getTime()
-      : Date.now();
+  if (recorder && recorder.state === 'recording') {
+    lastProcessedCommandSeq = commandSeq;
+    return;
+  }
 
-    const options = chosenMime ? {
-      mimeType: chosenMime,
-      videoBitsPerSecond: 8000000,
-      audioBitsPerSecond: 128000
-    } : undefined;
+  chunks = [];
+  activePerf = perf;
+  activePerfStartedAtIso = perf && perf.startedAt ? perf.startedAt : '';
+  recordingStartedAtMs = activePerfStartedAtIso
+    ? new Date(activePerfStartedAtIso).getTime()
+    : Date.now();
 
-    recorder = new MediaRecorder(stream, options);
+  const options = chosenMime ? {
+    mimeType: chosenMime,
+    videoBitsPerSecond: 8000000,
+    audioBitsPerSecond: 128000
+  } : undefined;
 
-    recorder.ondataavailable = function(e) {
-      if (e.data && e.data.size > 0) chunks.push(e.data);
-    };
+  recorder = new MediaRecorder(stream, options);
 
-    recorder.onerror = function(e) {
-      setDebug('Recorder error', true);
+  recorder.ondataavailable = function(e) {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+
+  recorder.onerror = function(e) {
+    setDebug('Recorder error', true);
+    updateHeartbeat({
+      recorderState: 'error',
+      lastError: String((e && e.error && e.error.message) || 'Recorder error')
+    });
+  };
+
+  recorder.onstop = async function() {
+    try {
+      const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
+      const filename = buildUniqueFilename(activePerf);
+
+      setDebug('Saving clip…', false);
+
+      const saveResult = await writeBlobToOpfs(blob, filename);
+
+      if (!saveResult.ok) {
+        setDebug('Internal save failed: ' + (saveResult.error || 'Unknown error'), true);
+        triggerDownload(blob, filename);
+      } else {
+        setDebug('Clip saved to internal storage.', false);
+        await loadOpfsClipIndex();
+        renderClipPanel();
+      }
+
+      beaconGet({
+        api: 'camera-clip-saved',
+        performanceId: activePerf ? activePerf.performanceId : '',
+        seqNo: activePerf ? activePerf.seqNo : '',
+        songName: activePerf ? activePerf.songName : '',
+        savedFileName: filename,
+        _ts: Date.now()
+      });
+
+      updateHeartbeat({
+        recorderState: 'idle',
+        currentPerformanceId: '',
+        lastSavedFilename: filename,
+        lastError: ''
+      });
+
+    } catch (err) {
+      const msg = String(err && err.message || err || 'Clip save failed');
+
+      setDebug('Clip save failed.', true);
+
       updateHeartbeat({
         recorderState: 'error',
-        lastError: String((e && e.error && e.error.message) || 'Recorder error')
+        currentPerformanceId: '',
+        lastError: msg
       });
-    };
+    } finally {
+      recorder = null;
+      activePerf = null;
+      activePerfStartedAtIso = '';
+      chunks = [];
+      recordingStartedAtMs = 0;
+      els.elapsed.textContent = '';
+      updateStopButton(false);
+      setIdleDebug();
+    }
+  };
 
-    recorder.onstop = async function() {
-      try {
-        const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
-const filename = buildUniqueFilename(activePerf);
+  recorder.start(2000);
+  lastProcessedCommandSeq = commandSeq;
 
-setDebug('Saving clip…', false);
+  updateHeartbeat({
+    recorderState: 'recording',
+    currentCommandSeq: commandSeq,
+    currentPerformanceId: perf.performanceId || '',
+    recordingStartedAt: perf.startedAt || new Date().toISOString(),
+    lastError: ''
+  });
 
-const saveResult = await writeBlobToOpfs(blob, filename);
-
-if (!saveResult.ok) {
-  setDebug('OPFS save failed: ' + (saveResult.error || 'Unknown error'), true);
-  triggerDownload(blob, filename);
-} else {
-  setDebug('Clip saved to internal storage.', false);
-  showLastSavedClipLink();
+  setDebug('Recording in progress...', false);
+  updateStopButton(true);
 }
-
-        beaconGet({
-          api: 'camera-clip-saved',
-          performanceId: activePerf ? activePerf.performanceId : '',
-          seqNo: activePerf ? activePerf.seqNo : '',
-          songName: activePerf ? activePerf.songName : '',
-          savedFileName: filename,
-          _ts: Date.now()
-        });
-
-        updateHeartbeat({
-          recorderState: 'idle',
-          currentPerformanceId: '',
-          lastSavedFilename: filename,
-          lastError: ''
-        });
-
-      } catch (err) {
-        const msg = String(err && err.message || err || 'Clip save failed');
-
-        setDebug('Clip save failed — fallback download may be needed.', true);
-
-        updateHeartbeat({
-          recorderState: 'error',
-          currentPerformanceId: '',
-          lastError: msg
-        });
-      } finally {
-        recorder = null;
-        activePerf = null;
-        activePerfStartedAtIso = '';
-        chunks = [];
-        recordingStartedAtMs = 0;
-        els.elapsed.textContent = '';
-        updateStopButton(false);
-        setIdleDebug();
-      }
-    };
-
-    recorder.start(2000);
-    lastProcessedCommandSeq = commandSeq;
-
-    updateHeartbeat({
-      recorderState: 'recording',
-      currentCommandSeq: commandSeq,
-      currentPerformanceId: perf.performanceId || '',
-      recordingStartedAt: perf.startedAt || new Date().toISOString(),
-      lastError: ''
-    });
-
-    setDebug('Recording in progress...', false);
-    updateStopButton(true);
-  }
 
   function stopRecording(commandSeq) {
     if (!recorder || recorder.state !== 'recording') {
@@ -817,22 +1003,51 @@ if (!saveResult.ok) {
     }
   }
 
-  els.btnEmergencyStop.addEventListener('click', function(){
+    els.btnEmergencyStop.addEventListener('click', function(){
     if (!(recorder && recorder.state === 'recording')) return;
 
     setDebug('Manual stop requested…', false);
     stopRecording(Number(lastProcessedCommandSeq || 0));
   });
 
-    els.btnArmStorage.addEventListener('click', function(){
+  els.btnArmStorage.addEventListener('click', function(){
     armStorage();
   });
-  els.btnRefreshState.addEventListener('click', function(){
+
+  els.btnRefreshState.addEventListener('click', async function(){
+    await loadOpfsClipIndex();
+    renderClipPanel();
     poll();
   });
 
+  els.recentText.addEventListener('click', async function(evt){
+    const dl = evt.target.closest('[data-opfs-download]');
+    if (dl) {
+      evt.preventDefault();
+      try {
+        await downloadOpfsClip(decodeURIComponent(dl.getAttribute('data-opfs-download')));
+      } catch (e) {
+        setDebug('Download failed.', true);
+      }
+      return;
+    }
+
+    const del = evt.target.closest('[data-opfs-delete]');
+    if (del) {
+      evt.preventDefault();
+      try {
+        await deleteOpfsClip(decodeURIComponent(del.getAttribute('data-opfs-delete')));
+        setDebug('Clip deleted.', false);
+      } catch (e) {
+        setDebug('Delete failed.', true);
+      }
+    }
+  });
+
   initMedia()
-    .then(function(){
+    .then(async function(){
+      await loadOpfsClipIndex();
+      renderClipPanel();
       poll();
       restartPollLoop(false);
       setInterval(tick, 1000);
