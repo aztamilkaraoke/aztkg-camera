@@ -82,28 +82,29 @@
     padding:12px;
   }
 
-  .seq{
-    font-size:12px;
-    font-weight:900;
-    color:var(--muted);
-    line-height:1.1;
-  }
+.seq{
+  font-size:12px;
+  font-weight:900;
+  color:var(--muted);
+  line-height:1.2;
+  letter-spacing:.2px;
+}
 
-  .song{
-    margin-top:4px;
-    font-size:22px;
-    line-height:1.08;
-    font-weight:900;
-    word-break:break-word;
-  }
+.song{
+  margin-top:8px;
+  font-size:22px;
+  line-height:1.12;
+  font-weight:900;
+  word-break:break-word;
+}
 
-  .singers{
-    margin-top:6px;
-    font-size:15px;
-    font-weight:800;
-    color:var(--muted);
-    line-height:1.2;
-  }
+.singers{
+  margin-top:10px;
+  font-size:15px;
+  font-weight:800;
+  color:var(--muted);
+  line-height:1.28;
+}
 
   .meta{
     margin-top:0;
@@ -120,14 +121,14 @@
     display:none;
   }
 
-  .statusWrap{
-    margin-top:8px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:8px;
-    flex-wrap:wrap;
-  }
+.statusWrap{
+  margin-top:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  flex-wrap:wrap;
+}
 
   .statusPill{
     display:inline-flex;
@@ -368,6 +369,13 @@
       flex-wrap:nowrap;
     }
 
+    .focusCard{
+  min-height:230px;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-start;
+}
+
     .btn{
       min-height:32px;
       padding:0 9px;
@@ -384,11 +392,11 @@
       <div class="topPill" id="recState">Recorder: —</div>
       <div class="topPill" id="quality">Quality: —</div>
       <div class="topPill" id="storageState">Storage: —</div>
-      <div class="topPill" id="buildState">Build: 2026.03.11.01</div>
+      <div class="topPill" id="buildState">Build: 2026.03.11.02</div>
     </div>
 
     <div class="main">
-      <div class="card">
+      <div class="card focusCard">
         <div class="seq" id="seqNo">SEQ #—</div>
         <div class="song" id="songName">Waiting for host…</div>
         <div class="singers" id="singers">—</div>
@@ -417,6 +425,6 @@
     </div>
   </div>
 
-  <script src="./camera.js?v=2026.03.11.01"></script>
+  <script src="./camera.js?v=2026.03.11.02"></script>
 </body>
 </html>
