@@ -335,7 +335,7 @@ function applyFocus(perf, mode) {
   els.meta.innerHTML = '';
 
   if (mode === 'recording') {
-    els.statusPill.textContent = 'REC';
+    els.statusPill.textContent = 'RECORDING';
     els.statusPill.className = 'statusPill recording';
   } else if (mode === 'saving') {
     els.statusPill.textContent = 'SAVING';
