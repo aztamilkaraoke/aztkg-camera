@@ -184,16 +184,62 @@
     }
   };
 
-      function updateStorageUi() {
-    if (!els.storageState) return;
+      async function updateStorageUi() {
+  if (!els.storageState) return;
 
-    if (navigator.storage && navigator.storage.getDirectory) {
-      setTop(els.storageState, 'Storage: Internal Ready');
-      return;
-    }
-
+  if (!navigator.storage || !navigator.storage.getDirectory) {
     setTop(els.storageState, 'Storage: Unsupported');
+    return;
   }
+
+  let persistent = false;
+
+  try {
+    if (navigator.storage.persisted) {
+      persistent = await navigator.storage.persisted();
+    }
+  } catch (e) {}
+
+  setTop(
+    els.storageState,
+    persistent ? 'Storage: Persistent' : 'Storage: Internal Only'
+  );
+}
+
+  async function ensurePersistentStorage() {
+  if (!navigator.storage || !navigator.storage.getDirectory) {
+    return { supported: false, persistent: false, justGranted: false };
+  }
+
+  let already = false;
+
+  try {
+    if (navigator.storage.persisted) {
+      already = await navigator.storage.persisted();
+    }
+  } catch (e) {}
+
+  if (already) {
+    await updateStorageUi();
+    return { supported: true, persistent: true, justGranted: false };
+  }
+
+  let granted = false;
+
+  try {
+    if (navigator.storage.persist) {
+      granted = await navigator.storage.persist();
+    }
+  } catch (e) {}
+
+  await updateStorageUi();
+
+  return {
+    supported: true,
+    persistent: !!granted,
+    justGranted: !!granted
+  };
+}
 
   async function armStorage() {
     try {
@@ -660,7 +706,15 @@ async function exportAllClips() {
 
     setDebug('Camera initialized. Syncing meet state…', false);
 
-updateStorageUi();
+const ps = await ensurePersistentStorage();
+
+if (ps.supported) {
+  if (ps.justGranted) {
+    setDebug('Persistent internal storage enabled.', false);
+  } else if (!ps.persistent) {
+    setDebug('Internal storage available. Persistence not granted.', true);
+  }
+}
 
 beaconGet({
   api: 'camera-status',
