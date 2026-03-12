@@ -1011,6 +1011,10 @@ els.recentText.addEventListener('click', async function(evt){
     .then(async function(){
       await loadOpfsClipIndex();
       renderClipPanel();
+      if (opfsClipIndex && opfsClipIndex.length) {
+  setDebug('Recovery ready: ' + opfsClipIndex.length + ' internal clip(s) found.', false);
+}
+      
       poll();
       restartPollLoop(false);
       setInterval(tick, 1000);
