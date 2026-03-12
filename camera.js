@@ -23,6 +23,7 @@
   let opfsRootHandle = null;
   const OPFS_CLIPS_DIR = 'clips';
   let opfsClipIndex = [];
+  let localRecorderState = 'idle';
 
   const els = {
     camReady: document.getElementById('camReady'),
@@ -47,6 +48,19 @@
   function setTop(el, text) {
     if (el) el.textContent = text;
   }
+
+  function setRecorderPill(state) {
+  localRecorderState = state || localRecorderState || 'idle';
+
+  const map = {
+    idle: 'Recorder: Idle',
+    recording: 'Recorder: Recording',
+    saving: 'Recorder: Saving',
+    error: 'Recorder: Error'
+  };
+
+  setTop(els.recState, map[localRecorderState] || 'Recorder: —');
+}
 
   function setRecorderPill(state) {
   const map = {
@@ -359,7 +373,7 @@ function applyFocus(perf, mode) {
 
     lastMode = mode;
 
-    setTop(els.recState, 'Recorder: ' + (cameraStatus.recorderState || '—'));
+    setRecorderPill(cameraStatus.recorderState || localRecorderState || 'idle');
 
     if (mode === 'SPLASH') {
       applyFocus(null, 'idle');
