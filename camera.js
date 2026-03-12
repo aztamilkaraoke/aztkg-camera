@@ -62,17 +62,6 @@
   setTop(els.recState, map[localRecorderState] || 'Recorder: —');
 }
 
-  function setRecorderPill(state) {
-  const map = {
-    idle: 'Recorder: Idle',
-    recording: 'Recorder: Recording',
-    saving: 'Recorder: Saving',
-    error: 'Recorder: Error'
-  };
-
-  setTop(els.recState, map[state] || 'Recorder: —');
-}
-
   function setDebug(text, isWarn) {
     if (!els.debugLine) return;
     els.debugLine.textContent = text || '';
