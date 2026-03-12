@@ -48,6 +48,17 @@
     if (el) el.textContent = text;
   }
 
+  function setRecorderPill(state) {
+  const map = {
+    idle: 'Recorder: Idle',
+    recording: 'Recorder: Recording',
+    saving: 'Recorder: Saving',
+    error: 'Recorder: Error'
+  };
+
+  setTop(els.recState, map[state] || 'Recorder: —');
+}
+
   function setDebug(text, isWarn) {
     if (!els.debugLine) return;
     els.debugLine.textContent = text || '';
@@ -705,6 +716,7 @@ async function exportAllClips() {
     );
 
     setDebug('Camera initialized. Syncing meet state…', false);
+    setRecorderPill('idle');
 
 const ps = await ensurePersistentStorage();
 
@@ -771,13 +783,14 @@ function startRecording(perf, commandSeq) {
     if (e.data && e.data.size > 0) chunks.push(e.data);
   };
 
-  recorder.onerror = function(e) {
-    setDebug('Recorder error', true);
-    updateHeartbeat({
-      recorderState: 'error',
-      lastError: String((e && e.error && e.error.message) || 'Recorder error')
-    });
-  };
+recorder.onerror = function(e) {
+  setDebug('Recorder error', true);
+  setRecorderPill('error');
+  updateHeartbeat({
+    recorderState: 'error',
+    lastError: String((e && e.error && e.error.message) || 'Recorder error')
+  });
+};
 
   recorder.onstop = async function() {
     try {
@@ -814,11 +827,13 @@ function startRecording(perf, commandSeq) {
         lastError: ''
       });
 
+      setRecorderPill('idle');
+
     } catch (err) {
       const msg = String(err && err.message || err || 'Clip save failed');
 
       setDebug('Clip save failed.', true);
-
+      setRecorderPill('error');
       updateHeartbeat({
         recorderState: 'error',
         currentPerformanceId: '',
@@ -848,6 +863,7 @@ function startRecording(perf, commandSeq) {
   });
 
   setDebug('Recording in progress...', false);
+  setRecorderPill('recording');
   updateStopButton(true);
 }
 
@@ -866,6 +882,7 @@ function startRecording(perf, commandSeq) {
     });
 
     setDebug('Stopping recorder...', false);
+    setRecorderPill('saving');
     recorder.stop();
     updateStopButton(false);
   }
