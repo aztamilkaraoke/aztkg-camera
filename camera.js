@@ -968,14 +968,16 @@ recorder.onerror = function(e) {
       renderClipPanel();
       }
 
-      beaconGet({
-        api: 'camera-clip-saved',
-        performanceId: activePerf ? activePerf.performanceId : '',
-        seqNo: activePerf ? activePerf.seqNo : '',
-        songName: activePerf ? activePerf.songName : '',
-        savedFileName: filename,
-        _ts: Date.now()
-      });
+      await jsonp(
+        APPS_SCRIPT_BASE + '?' + new URLSearchParams({
+          api: 'camera-clip-saved',
+          performanceId: activePerf ? activePerf.performanceId : '',
+          seqNo: activePerf ? activePerf.seqNo : '',
+          songName: activePerf ? activePerf.songName : '',
+          savedFileName: filename,
+          _ts: Date.now()
+        }).toString()
+      );
 
       updateHeartbeat({
         recorderState: 'idle',
