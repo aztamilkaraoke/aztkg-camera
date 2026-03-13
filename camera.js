@@ -814,10 +814,11 @@ async function exportAllClips() {
     }
   }
 
-  setDebug(
-    'Download started for ' + done + ' clip' + (done === 1 ? '' : 's') + '.',
-    false
-  );
+setDebug(
+  'Export started for ' + done + ' clip' + (done === 1 ? '' : 's') +
+  '. Check your Downloads folder.',
+  false
+);
   return true;
 }
 
