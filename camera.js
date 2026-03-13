@@ -692,6 +692,23 @@ function getSelectedClipName() {
     triggerDownload(file, name);
   }
 
+    async function exportOpfsClipToFolder(dirHandle, name) {
+    const clipsDir = await getOpfsClipsDir();
+    const fileHandle = await clipsDir.getFileHandle(name, { create: false });
+    const file = await fileHandle.getFile();
+
+    const outHandle = await dirHandle.getFileHandle(name, { create: true });
+    const writable = await outHandle.createWritable();
+
+    try {
+      await writable.write(file);
+      await writable.close();
+    } catch (e) {
+      try { await writable.abort(); } catch (_) {}
+      throw e;
+    }
+  }
+
   async function deleteOpfsClip(name) {
     const clipsDir = await getOpfsClipsDir();
     await clipsDir.removeEntry(name);
@@ -766,20 +783,29 @@ async function exportAllClips() {
     return false;
   }
 
+  if (!window.showDirectoryPicker) {
+    setDebug('Folder export is not supported on this browser.', true);
+    return false;
+  }
+
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (e) {
+    setDebug('Export cancelled.', true);
+    return false;
+  }
+
   let done = 0;
 
   for (const item of opfsClipIndex) {
     try {
-      await downloadOpfsClip(item.name);
+      await exportOpfsClipToFolder(dirHandle, item.name);
       done++;
-      setDebug('Starting downloads… ' + done + '/' + opfsClipIndex.length, false);
-
-      await new Promise(function(resolve) {
-        setTimeout(resolve, 350);
-      });
+      setDebug('Exporting clips… ' + done + '/' + opfsClipIndex.length, false);
     } catch (e) {
       setDebug(
-        'Download-all failed on clip ' + (done + 1) + '/' + opfsClipIndex.length + ': ' +
+        'Export failed on clip ' + (done + 1) + '/' + opfsClipIndex.length + ': ' +
         String(e && (e.message || e.name) || e || 'Unknown error'),
         true
       );
@@ -788,7 +814,7 @@ async function exportAllClips() {
   }
 
   setDebug(
-    'Download started for ' + done + ' clip' + (done === 1 ? '' : 's') + '.',
+    'Exported ' + done + ' clip' + (done === 1 ? '' : 's') + ' to the selected folder.',
     false
   );
   return true;
@@ -1100,17 +1126,25 @@ recorder.onerror = function(e) {
       pollFailCount = 0;
       setTop(els.netState, 'Network: Online');
 
-      // Auto-resume authorized session after refresh
-      if (!wasAuthorized && storedValid) {
-        gateValidated = true;
-        hideGate_();
+      // Refresh boot path:
+      // if stored access is valid, auto-resume;
+      // otherwise force the gate before allowing control.
+      if (!wasAuthorized) {
+        if (storedValid) {
+          gateValidated = true;
+          hideGate_();
+        } else {
+          clearStoredAccess_();
+          gateValidated = false;
+          showGate_();
+        }
       }
 
       // Always keep the core camera UI/state pipeline alive
       applyState(st);
 
       // Only honor recorder commands when this console is authorized
-      if (canControl) {
+      if (gateValidated) {
         handleCommand(st);
       }
 
