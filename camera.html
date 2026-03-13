@@ -400,10 +400,185 @@
       font-size:9px;
     }
   }
+
+    .hidden{ display:none !important; }
+
+  .accessGate{
+    position:fixed;
+    inset:0;
+    z-index:9999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:32px;
+    background:
+      radial-gradient(1200px 800px at 18% 12%, rgba(255,255,255,.12), transparent 62%),
+      radial-gradient(1000px 760px at 82% 18%, rgba(255,255,255,.08), transparent 62%),
+      linear-gradient(180deg, var(--panel2), var(--panel), var(--bg));
+  }
+
+  .accessGateBg{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:
+      radial-gradient(900px 420px at 50% 8%, rgba(255,255,255,.05), transparent 65%);
+  }
+
+  .accessGateInner{
+    position:relative;
+    z-index:1;
+    width:min(620px, calc(100vw - 48px));
+  }
+
+  .accessGateCard{
+    border-radius:var(--radius);
+    background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+    backdrop-filter:blur(12px);
+    padding:34px 32px 28px;
+    text-align:center;
+  }
+
+  .accessGateBrandRow{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:18px;
+  }
+
+  .accessGateLogo{
+    width:72px;
+    height:72px;
+    border-radius:50%;
+    object-fit:cover;
+    flex:0 0 auto;
+  }
+
+  .accessGateGroup{
+    font-size:36px;
+    font-weight:900;
+    letter-spacing:.4px;
+    color:var(--text);
+    line-height:1;
+    white-space:nowrap;
+  }
+
+  .accessGateTitle{
+    margin-top:14px;
+    font-size:28px;
+    font-weight:800;
+    line-height:1.1;
+    color:var(--text);
+    opacity:.9;
+    text-align:center;
+  }
+
+  .accessGateSub{
+    margin-top:14px;
+    font-size:17px;
+    line-height:1.5;
+    color:var(--dim);
+  }
+
+  .accessGateForm{
+    margin-top:24px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+
+  .accessGateInput{
+    width:180px;
+    height:56px;
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.06);
+    color:var(--text);
+    text-align:center;
+    font-size:28px;
+    font-weight:900;
+    letter-spacing:6px;
+    outline:none;
+  }
+
+  .accessGateInput::placeholder{
+    letter-spacing:1px;
+    font-size:20px;
+    font-weight:700;
+    color:rgba(246,248,255,.38);
+  }
+
+  .accessGateBtn{
+    height:56px;
+    padding:0 22px;
+    border:0;
+    border-radius:16px;
+    background:rgba(255,255,255,.12);
+    color:var(--text);
+    font-size:16px;
+    font-weight:900;
+    letter-spacing:.4px;
+    cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+
+  .accessGateBtn:disabled{
+    opacity:.65;
+    cursor:default;
+  }
+
+  .accessGateError{
+    margin-top:14px;
+    color:#fca5a5;
+    font-size:14px;
+    font-weight:800;
+  }
+
+  .accessGateBusy{
+    margin-top:14px;
+    color:var(--dim);
+    font-size:14px;
+    font-weight:800;
+  }
 </style>
 </head>
 <body>
   <div class="app">
+      <div id="accessGate" class="accessGate hidden">
+    <div class="accessGateBg"></div>
+
+    <div class="accessGateInner">
+      <div class="accessGateCard">
+        <div class="accessGateBrandRow">
+          <img src="YOUR_LOGO_URL_HERE" class="accessGateLogo" />
+          <div class="accessGateGroup">AZ Tamil Karaoke Group</div>
+        </div>
+
+        <div class="accessGateTitle">Camera Console Locked</div>
+        <div class="accessGateSub">Enter the Meet Access Key from Host Console to continue.</div>
+
+        <div class="accessGateForm">
+          <input
+            id="gateKeyInput"
+            class="accessGateInput"
+            type="text"
+            inputmode="numeric"
+            maxlength="4"
+            autocomplete="one-time-code"
+            placeholder="4-digit key"
+          />
+          <button id="gateJoinBtn" class="accessGateBtn" type="button">Join Meet</button>
+        </div>
+
+        <div id="gateError" class="accessGateError hidden"></div>
+        <div id="gateBusy" class="accessGateBusy hidden">Validating...</div>
+      </div>
+    </div>
+  </div>
     <div class="topbar">
       <div class="topPill" id="camReady">Camera: —</div>
       <div class="topPill" id="netState">Network: —</div>
