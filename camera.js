@@ -105,14 +105,10 @@
     showGateError_('');
     setGateBusy_(false);
     showEl(els.accessGate);
-    const app = document.querySelector('.app');
-    if (app) app.classList.add('hidden');
   }
 
   function hideGate_(){
     hideEl(els.accessGate);
-    const app = document.querySelector('.app');
-    if (app) app.classList.remove('hidden');
   }
 
   function unlockCamera_(version){
@@ -1181,7 +1177,25 @@ els.recentText.addEventListener('click', async function(evt){
   }
 });
 
-    initGate_();
+  initGate_();
+  showGate_();
+
+  initMedia()
+    .then(async function(){
+      await loadOpfsClipIndex();
+      renderClipPanel();
+      if (opfsClipIndex && opfsClipIndex.length) {
+        setDebug('Recovery ready: ' + opfsClipIndex.length + ' internal clip(s) found.', false);
+      }
+
+      setInterval(tick, 1000);
+
+      if (readStoredAccess_()){
+        gateValidated = false;
+        poll();
+        restartPollLoop(false);
+      }
+    })
     .catch(function(err){
       const msg = String(
         err && err.name
