@@ -692,16 +692,22 @@ function getSelectedClipName() {
     triggerDownload(file, name);
   }
 
-    async function exportOpfsClipToFolder(dirHandle, name) {
+      async function exportOpfsClipToFolder(dirHandle, name) {
+    const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      throw new Error('Folder access was not granted');
+    }
+
     const clipsDir = await getOpfsClipsDir();
     const fileHandle = await clipsDir.getFileHandle(name, { create: false });
     const file = await fileHandle.getFile();
+    const buffer = await file.arrayBuffer();
 
     const outHandle = await dirHandle.getFileHandle(name, { create: true });
     const writable = await outHandle.createWritable();
 
     try {
-      await writable.write(file);
+      await writable.write(buffer);
       await writable.close();
     } catch (e) {
       try { await writable.abort(); } catch (_) {}
@@ -1137,6 +1143,8 @@ recorder.onerror = function(e) {
           clearStoredAccess_();
           gateValidated = false;
           showGate_();
+          updateHeartbeat();
+          return;
         }
       }
 
