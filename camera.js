@@ -1178,7 +1178,6 @@ els.recentText.addEventListener('click', async function(evt){
 });
 
   initGate_();
-  showGate_();
 
   initMedia()
     .then(async function(){
@@ -1194,6 +1193,8 @@ els.recentText.addEventListener('click', async function(evt){
         gateValidated = false;
         poll();
         restartPollLoop(false);
+      } else {
+        showGate_();
       }
     })
     .catch(function(err){
