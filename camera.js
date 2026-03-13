@@ -27,6 +27,7 @@
   const ACCESS_ROLE = 'camera';
   const ACCESS_STORAGE_KEY = 'aztkg.consoleAccess.camera';
   let gateValidated = false;
+  let gateSubmitInFlight = false;
   
     const els = {
     accessGate: document.getElementById('accessGate'),
@@ -100,12 +101,22 @@
     if (busy) showEl(els.gateBusy); else hideEl(els.gateBusy);
   }
 
-  function showGate_(){
-    gateValidated = false;
-    showGateError_('');
-    setGateBusy_(false);
-    showEl(els.accessGate);
-  }
+function showGate_(){
+  gateValidated = false;
+  gateSubmitInFlight = false;
+  showGateError_('');
+  setGateBusy_(false);
+  showEl(els.accessGate);
+
+  setTimeout(function(){
+    try {
+      if (els.gateKeyInput){
+        els.gateKeyInput.focus();
+        els.gateKeyInput.select();
+      }
+    } catch(e){}
+  }, 0);
+}
 
   function hideGate_(){
     hideEl(els.accessGate);
@@ -148,60 +159,91 @@
     return false;
   }
 
-  async function submitGateKey_(){
-    const raw = els.gateKeyInput ? String(els.gateKeyInput.value || '') : '';
-    const inputKey = raw.replace(/\D+/g, '').slice(0, 4);
+async function submitGateKey_(){
+  if (gateSubmitInFlight) return;
 
-    if (els.gateKeyInput) els.gateKeyInput.value = inputKey;
+  const raw = els.gateKeyInput ? String(els.gateKeyInput.value || '') : '';
+  const inputKey = raw.replace(/\D+/g, '').slice(0, 4);
 
-    if (inputKey.length !== 4){
-      showGateError_('Please enter a valid 4-digit Meet Access Key.');
+  if (els.gateKeyInput) els.gateKeyInput.value = inputKey;
+
+  if (inputKey.length !== 4){
+    showGateError_('Please enter a valid 4-digit Meet Access Key.');
+    if (els.gateKeyInput){
+      els.gateKeyInput.focus();
+      els.gateKeyInput.select();
+    }
+    return;
+  }
+
+  gateSubmitInFlight = true;
+  showGateError_('');
+  setGateBusy_(true);
+
+  try {
+    const res = await jsonp(
+      APPS_SCRIPT_BASE +
+      '?api=validate-meet-access&inputKey=' + encodeURIComponent(inputKey)
+    );
+
+    gateSubmitInFlight = false;
+    setGateBusy_(false);
+
+    const out = res && res.result ? res.result : null;
+    if (res && res.ok && out && out.ok){
+      unlockCamera_(out.version || 0);
       return;
     }
 
-    showGateError_('');
-    setGateBusy_(true);
-
-    try {
-      const res = await jsonp(
-        APPS_SCRIPT_BASE +
-        '?api=validate-meet-access&inputKey=' + encodeURIComponent(inputKey)
-      );
-
-      setGateBusy_(false);
-
-      const out = res && res.result ? res.result : null;
-      if (res && res.ok && out && out.ok){
-        unlockCamera_(out.version || 0);
-        return;
-      }
-
-      showGateError_('Invalid Meet Access Key. Please try again.');
-    } catch (err) {
-      setGateBusy_(false);
-      console.log('Camera key validation failed:', err);
-      showGateError_('Unable to validate right now. Please try again.');
-    }
-  }
-
-  function initGate_(){
     if (els.gateKeyInput){
-      els.gateKeyInput.addEventListener('input', function(){
-        this.value = String(this.value || '').replace(/\D+/g, '').slice(0, 4);
-      });
-
-      els.gateKeyInput.addEventListener('keydown', function(e){
-        if (e.key === 'Enter'){
-          e.preventDefault();
-          submitGateKey_();
-        }
-      });
+      els.gateKeyInput.value = '';
+      els.gateKeyInput.focus();
     }
+    showGateError_('Invalid Meet Access Key. Please try again.');
+  } catch (err) {
+    gateSubmitInFlight = false;
+    setGateBusy_(false);
+    console.log('Camera key validation failed:', err);
 
-    if (els.gateJoinBtn){
-      els.gateJoinBtn.addEventListener('click', submitGateKey_);
+    if (els.gateKeyInput){
+      els.gateKeyInput.value = '';
+      els.gateKeyInput.focus();
     }
+    showGateError_('Unable to validate right now. Please try again.');
   }
+}
+
+function initGate_(){
+  if (els.gateKeyInput){
+    els.gateKeyInput.addEventListener('input', function(){
+      const cleaned = String(this.value || '').replace(/\D+/g, '').slice(0, 4);
+      this.value = cleaned;
+
+      if (cleaned.length === 4 && !gateSubmitInFlight){
+        submitGateKey_();
+      }
+    });
+
+    els.gateKeyInput.addEventListener('focus', function(){
+      try { this.select(); } catch(e){}
+    });
+
+    els.gateKeyInput.addEventListener('click', function(){
+      try { this.select(); } catch(e){}
+    });
+
+    els.gateKeyInput.addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){
+        e.preventDefault();
+        submitGateKey_();
+      }
+    });
+  }
+
+  if (els.gateJoinBtn){
+    els.gateJoinBtn.addEventListener('click', submitGateKey_);
+  }
+}
 
   function setRecorderPill(state) {
   localRecorderState = state || localRecorderState || 'idle';
