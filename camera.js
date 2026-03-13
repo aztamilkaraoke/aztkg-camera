@@ -24,8 +24,17 @@
   const OPFS_CLIPS_DIR = 'clips';
   let opfsClipIndex = [];
   let localRecorderState = 'idle';
+  const ACCESS_ROLE = 'camera';
+  const ACCESS_STORAGE_KEY = 'aztkg.consoleAccess.camera';
+  let gateValidated = false;
+  
+    const els = {
+    accessGate: document.getElementById('accessGate'),
+    gateKeyInput: document.getElementById('gateKeyInput'),
+    gateJoinBtn: document.getElementById('gateJoinBtn'),
+    gateError: document.getElementById('gateError'),
+    gateBusy: document.getElementById('gateBusy'),
 
-  const els = {
     camReady: document.getElementById('camReady'),
     netState: document.getElementById('netState'),
     recState: document.getElementById('recState'),
@@ -47,6 +56,154 @@
 
   function setTop(el, text) {
     if (el) el.textContent = text;
+  }
+
+    function showEl(el){
+    if (el) el.classList.remove('hidden');
+  }
+
+  function hideEl(el){
+    if (el) el.classList.add('hidden');
+  }
+
+  function readStoredAccess_(){
+    try{
+      const raw = localStorage.getItem(ACCESS_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch(e){
+      return null;
+    }
+  }
+
+  function writeStoredAccess_(version){
+    try{
+      localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify({
+        role: ACCESS_ROLE,
+        authorized: true,
+        version: Number(version || 0)
+      }));
+    } catch(e){}
+  }
+
+  function clearStoredAccess_(){
+    try{ localStorage.removeItem(ACCESS_STORAGE_KEY); } catch(e){}
+  }
+
+  function showGateError_(msg){
+    if (els.gateError) els.gateError.textContent = msg || '';
+    if (msg) showEl(els.gateError); else hideEl(els.gateError);
+  }
+
+  function setGateBusy_(busy){
+    if (els.gateJoinBtn) els.gateJoinBtn.disabled = !!busy;
+    if (els.gateKeyInput) els.gateKeyInput.disabled = !!busy;
+    if (busy) showEl(els.gateBusy); else hideEl(els.gateBusy);
+  }
+
+  function showGate_(){
+    gateValidated = false;
+    showGateError_('');
+    setGateBusy_(false);
+    showEl(els.accessGate);
+    const app = document.querySelector('.app');
+    if (app) app.classList.add('hidden');
+  }
+
+  function hideGate_(){
+    hideEl(els.accessGate);
+    const app = document.querySelector('.app');
+    if (app) app.classList.remove('hidden');
+  }
+
+  function unlockCamera_(version){
+    gateValidated = true;
+    writeStoredAccess_(version);
+    hideGate_();
+    poll();
+  }
+
+  function validateStoredAccessAgainstState_(st){
+    const ma = st && st.meetAccess ? st.meetAccess : null;
+    const stored = readStoredAccess_();
+
+    if (!stored || !stored.authorized) return false;
+    if (!ma || !ma.exists) return false;
+    if (Number(stored.version || 0) !== Number(ma.version || 0)) return false;
+
+    return true;
+  }
+
+  function handleMeetAccessInvalidation_(st){
+    const ma = st && st.meetAccess ? st.meetAccess : null;
+    const stored = readStoredAccess_();
+
+    if (!stored || !stored.authorized) return false;
+
+    // Graceful rotation:
+    // End Meet => invalidate immediately
+    if (!ma || !ma.exists){
+      clearStoredAccess_();
+      showGate_();
+      return true;
+    }
+
+    // New key/version change => do not kill active camera session
+    return false;
+  }
+
+  function submitGateKey_(){
+    const raw = els.gateKeyInput ? String(els.gateKeyInput.value || '') : '';
+    const inputKey = raw.replace(/\D+/g, '').slice(0, 4);
+
+    if (els.gateKeyInput) els.gateKeyInput.value = inputKey;
+
+    if (inputKey.length !== 4){
+      showGateError_('Please enter a valid 4-digit Meet Access Key.');
+      return;
+    }
+
+    showGateError_('');
+    setGateBusy_(true);
+
+    google.script.run
+      .withSuccessHandler(function(res){
+        setGateBusy_(false);
+
+        const out = res && res.result ? res.result : null;
+        if (res && res.ok && out && out.ok){
+          unlockCamera_(out.version || 0);
+          return;
+        }
+
+        showGateError_('Invalid Meet Access Key. Please try again.');
+      })
+      .withFailureHandler(function(){
+        setGateBusy_(false);
+        showGateError_('Unable to validate right now. Please try again.');
+      })
+      .apiAction({
+        type: 'VALIDATE_MEET_ACCESS_KEY',
+        inputKey: inputKey
+      });
+  }
+
+  function initGate_(){
+    if (els.gateKeyInput){
+      els.gateKeyInput.addEventListener('input', function(){
+        this.value = String(this.value || '').replace(/\D+/g, '').slice(0, 4);
+      });
+
+      els.gateKeyInput.addEventListener('keydown', function(e){
+        if (e.key === 'Enter'){
+          e.preventDefault();
+          submitGateKey_();
+        }
+      });
+    }
+
+    if (els.gateJoinBtn){
+      els.gateJoinBtn.addEventListener('click', submitGateKey_);
+    }
   }
 
   function setRecorderPill(state) {
@@ -928,13 +1085,29 @@ recorder.onerror = function(e) {
     pollTimer = setInterval(poll, nextMs);
   }
 
-  async function poll() {
+    async function poll() {
     if (inFlight) return;
     inFlight = true;
     setTop(els.netState, 'Network: Syncing');
 
     try {
-            const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
+      const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
+
+      if (!gateValidated){
+        if (validateStoredAccessAgainstState_(st)){
+          gateValidated = true;
+          hideGate_();
+        } else {
+          clearStoredAccess_();
+          showGate_();
+          return;
+        }
+      } else {
+        if (handleMeetAccessInvalidation_(st)){
+          return;
+        }
+      }
+
       pollFailCount = 0;
       setTop(els.netState, 'Network: Online');
       applyState(st);
@@ -1007,17 +1180,28 @@ els.recentText.addEventListener('click', async function(evt){
   }
 });
 
+    initGate_();
+
   initMedia()
     .then(async function(){
       await loadOpfsClipIndex();
       renderClipPanel();
       if (opfsClipIndex && opfsClipIndex.length) {
-  setDebug('Recovery ready: ' + opfsClipIndex.length + ' internal clip(s) found.', false);
-}
-      
-      poll();
-      restartPollLoop(false);
+        setDebug('Recovery ready: ' + opfsClipIndex.length + ' internal clip(s) found.', false);
+      }
+
       setInterval(tick, 1000);
+
+      if (readStoredAccess_()){
+        hideEl(els.accessGate);
+        const app = document.querySelector('.app');
+        if (app) app.classList.add('hidden');
+        gateValidated = false;
+        poll();
+        restartPollLoop(false);
+      } else {
+        showGate_();
+      }
     })
     .catch(function(err){
       const msg = String(
