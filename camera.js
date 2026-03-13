@@ -692,22 +692,26 @@ function getSelectedClipName() {
     triggerDownload(file, name);
   }
 
-  async function exportOpfsClipToFolder(dirHandle, name) {
+    async function exportOpfsClipToFolder(dirHandle, name) {
     const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') {
       throw new Error('Folder access was not granted');
     }
 
     const clipsDir = await getOpfsClipsDir();
-    const fileHandle = await clipsDir.getFileHandle(name, { create: false });
-    const file = await fileHandle.getFile();
-    const buffer = await file.arrayBuffer();
-
-    const outHandle = await dirHandle.getFileHandle(name, { create: true });
-    const writable = await outHandle.createWritable();
+    const srcHandle = await clipsDir.getFileHandle(name, { create: false });
+    const srcFile = await srcHandle.getFile();
+    const bytes = new Uint8Array(await srcFile.arrayBuffer());
 
     try {
-      await writable.write(buffer);
+      await dirHandle.removeEntry(name);
+    } catch (_) {}
+
+    const outHandle = await dirHandle.getFileHandle(name, { create: true });
+    const writable = await outHandle.createWritable({ keepExistingData: false });
+
+    try {
+      await writable.write(bytes);
       await writable.close();
     } catch (e) {
       try { await writable.abort(); } catch (_) {}
