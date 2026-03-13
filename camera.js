@@ -148,7 +148,7 @@
     return false;
   }
 
-  function submitGateKey_(){
+    function submitGateKey_(){
     const raw = els.gateKeyInput ? String(els.gateKeyInput.value || '') : '';
     const inputKey = raw.replace(/\D+/g, '').slice(0, 4);
 
@@ -162,26 +162,39 @@
     showGateError_('');
     setGateBusy_(true);
 
-    google.script.run
-      .withSuccessHandler(function(res){
+    try {
+      if (!(window.google && google.script && google.script.run)) {
         setGateBusy_(false);
+        showGateError_('Validation service is unavailable on this page. Refresh and try again.');
+        return;
+      }
 
-        const out = res && res.result ? res.result : null;
-        if (res && res.ok && out && out.ok){
-          unlockCamera_(out.version || 0);
-          return;
-        }
+      google.script.run
+        .withSuccessHandler(function(res){
+          setGateBusy_(false);
 
-        showGateError_('Invalid Meet Access Key. Please try again.');
-      })
-      .withFailureHandler(function(){
-        setGateBusy_(false);
-        showGateError_('Unable to validate right now. Please try again.');
-      })
-      .apiAction({
-        type: 'VALIDATE_MEET_ACCESS_KEY',
-        inputKey: inputKey
-      });
+          const out = res && res.result ? res.result : null;
+          if (res && res.ok && out && out.ok){
+            unlockCamera_(out.version || 0);
+            return;
+          }
+
+          showGateError_('Invalid Meet Access Key. Please try again.');
+        })
+        .withFailureHandler(function(err){
+          setGateBusy_(false);
+          console.log('Camera key validation failed:', err);
+          showGateError_('Unable to validate right now. Please try again.');
+        })
+        .apiAction({
+          type: 'VALIDATE_MEET_ACCESS_KEY',
+          inputKey: inputKey
+        });
+    } catch (err) {
+      setGateBusy_(false);
+      console.log('Camera key validation crashed:', err);
+      showGateError_('Validation failed to start. Refresh and try again.');
+    }
   }
 
   function initGate_(){
