@@ -1082,7 +1082,7 @@ recorder.onerror = function(e) {
     pollTimer = setInterval(poll, nextMs);
   }
 
-    async function poll() {
+  async function poll() {
     if (inFlight) return;
     inFlight = true;
     setTop(els.netState, 'Network: Syncing');
@@ -1090,26 +1090,38 @@ recorder.onerror = function(e) {
     try {
       const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
 
-      if (!gateValidated){
-        if (validateStoredAccessAgainstState_(st)){
-          gateValidated = true;
-          hideGate_();
-        } else {
-          clearStoredAccess_();
-          showGate_();
-          return;
-        }
-      } else {
-        if (handleMeetAccessInvalidation_(st)){
-          return;
-        }
-      }
+      const ma = st && st.meetAccess ? st.meetAccess : null;
+      const storedValid = validateStoredAccessAgainstState_(st);
+      const wasAuthorized = !!gateValidated;
+      const canControl = wasAuthorized || storedValid;
 
       pollFailCount = 0;
       setTop(els.netState, 'Network: Online');
+
+      // Auto-resume authorized session after refresh
+      if (!wasAuthorized && storedValid) {
+        gateValidated = true;
+        hideGate_();
+      }
+
+      // Always keep the core camera UI/state pipeline alive
       applyState(st);
-      handleCommand(st);
+
+      // Only honor recorder commands when this console is authorized
+      if (canControl) {
+        handleCommand(st);
+      }
+
       updateHeartbeat();
+
+      // Graceful rotation:
+      // existing session stays alive on key change
+      // but End Meet should lock after the current state is processed
+      if (wasAuthorized && (!ma || !ma.exists)) {
+        clearStoredAccess_();
+        gateValidated = false;
+        showGate_();
+      }
     } catch (err) {
       pollFailCount++;
       setTop(els.netState, 'Network: Offline');
