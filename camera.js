@@ -692,7 +692,7 @@ function getSelectedClipName() {
     triggerDownload(file, name);
   }
 
-      async function exportOpfsClipToFolder(dirHandle, name) {
+  async function exportOpfsClipToFolder(dirHandle, name) {
     const perm = await dirHandle.requestPermission({ mode: 'readwrite' });
     if (perm !== 'granted') {
       throw new Error('Folder access was not granted');
