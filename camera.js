@@ -793,29 +793,20 @@ async function exportAllClips() {
     return false;
   }
 
-  if (!window.showDirectoryPicker) {
-    setDebug('Folder export is not supported on this browser.', true);
-    return false;
-  }
-
-  let dirHandle;
-  try {
-    dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  } catch (e) {
-    setDebug('Export cancelled.', true);
-    return false;
-  }
-
   let done = 0;
 
   for (const item of opfsClipIndex) {
     try {
-      await exportOpfsClipToFolder(dirHandle, item.name);
+      await downloadOpfsClip(item.name);
       done++;
-      setDebug('Exporting clips… ' + done + '/' + opfsClipIndex.length, false);
+      setDebug('Starting downloads… ' + done + '/' + opfsClipIndex.length, false);
+
+      await new Promise(function(resolve) {
+        setTimeout(resolve, 350);
+      });
     } catch (e) {
       setDebug(
-        'Export failed on clip ' + (done + 1) + '/' + opfsClipIndex.length + ': ' +
+        'Download-all failed on clip ' + (done + 1) + '/' + opfsClipIndex.length + ': ' +
         String(e && (e.message || e.name) || e || 'Unknown error'),
         true
       );
@@ -824,7 +815,7 @@ async function exportAllClips() {
   }
 
   setDebug(
-    'Exported ' + done + ' clip' + (done === 1 ? '' : 's') + ' to the selected folder.',
+    'Download started for ' + done + ' clip' + (done === 1 ? '' : 's') + '.',
     false
   );
   return true;
