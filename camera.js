@@ -120,6 +120,7 @@
     writeStoredAccess_(version);
     hideGate_();
     poll();
+    restartPollLoop(false);
   }
 
   function validateStoredAccessAgainstState_(st){
@@ -1181,28 +1182,6 @@ els.recentText.addEventListener('click', async function(evt){
 });
 
     initGate_();
-
-  initMedia()
-    .then(async function(){
-      await loadOpfsClipIndex();
-      renderClipPanel();
-      if (opfsClipIndex && opfsClipIndex.length) {
-        setDebug('Recovery ready: ' + opfsClipIndex.length + ' internal clip(s) found.', false);
-      }
-
-      setInterval(tick, 1000);
-
-      if (readStoredAccess_()){
-        hideEl(els.accessGate);
-        const app = document.querySelector('.app');
-        if (app) app.classList.add('hidden');
-        gateValidated = false;
-        poll();
-        restartPollLoop(false);
-      } else {
-        showGate_();
-      }
-    })
     .catch(function(err){
       const msg = String(
         err && err.name
