@@ -544,9 +544,79 @@
     font-size:14px;
     font-weight:800;
   }
+
+    @media (orientation: portrait) {
+    .accessGate{
+      padding:18px;
+      align-items:flex-start;
+      padding-top:max(28px, env(safe-area-inset-top, 0px) + 16px);
+    }
+
+    .accessGateInner{
+      width:100%;
+      max-width:420px;
+    }
+
+    .accessGateCard{
+      padding:24px 18px 22px;
+    }
+
+    .accessGateBrandRow{
+      flex-direction:column;
+      gap:12px;
+    }
+
+    .accessGateLogo{
+      width:64px;
+      height:64px;
+    }
+
+    .accessGateGroup{
+      font-size:28px;
+      line-height:1.08;
+      white-space:normal;
+      text-wrap:balance;
+    }
+
+    .accessGateTitle{
+      margin-top:16px;
+      font-size:24px;
+      line-height:1.08;
+    }
+
+    .accessGateSub{
+      margin-top:12px;
+      font-size:15px;
+      line-height:1.4;
+    }
+
+    .accessGateForm{
+      margin-top:20px;
+      flex-direction:column;
+      align-items:stretch;
+      gap:12px;
+    }
+
+    .accessGateInput{
+      width:100%;
+      height:56px;
+      font-size:24px;
+      letter-spacing:4px;
+    }
+
+    .accessGateBtn{
+      width:100%;
+      height:54px;
+      font-size:16px;
+    }
+  }
+
+    body.gateBoot .app{
+    visibility:hidden;
+  }  
 </style>
 </head>
-<body>
+<body class="gateBoot">
         <div id="accessGate" class="accessGate hidden">
     <div class="accessGateBg"></div>
 
@@ -585,7 +655,7 @@
       <div class="topPill" id="recState">Recorder: —</div>
       <div class="topPill" id="quality">Quality: —</div>
       <div class="topPill" id="storageState">Storage: —</div>
-      <div class="topPill" id="buildState">Build: 2026.03.13.09</div>
+      <div class="topPill" id="buildState">Build: 2026.03.14.01</div>
     </div>
 
     <div class="main">
@@ -622,6 +692,6 @@
     </div>
   </div>
 
-  <script src="./camera.js?v=2026.03.13.09"></script>
+  <script src="./camera.js?v=2026.03.14.01"></script>
 </body>
 </html>
