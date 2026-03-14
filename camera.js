@@ -107,6 +107,7 @@ function showGate_(){
   showGateError_('');
   setGateBusy_(false);
   showEl(els.accessGate);
+  clearGateBoot_();
 
   setTimeout(function(){
     try {
@@ -118,9 +119,15 @@ function showGate_(){
   }, 0);
 }
 
-  function hideGate_(){
-    hideEl(els.accessGate);
-  }
+function hideGate_(){
+  hideEl(els.accessGate);
+  clearGateBoot_();
+}
+
+  function clearGateBoot_(){
+  try { document.body.classList.remove('gateBoot'); } catch(e){}
+}
+
 
   function unlockCamera_(version){
     gateValidated = true;
@@ -1272,6 +1279,12 @@ els.recentText.addEventListener('click', async function(evt){
 });
 
   initGate_();
+
+    const bootStoredAccess = readStoredAccess_();
+  if (!(bootStoredAccess && bootStoredAccess.authorized)) {
+    showGate_();
+  }
+
 
   initMedia()
     .then(async function(){
