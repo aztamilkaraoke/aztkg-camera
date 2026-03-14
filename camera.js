@@ -67,6 +67,13 @@
     if (el) el.classList.add('hidden');
   }
 
+  function clearGateBoot_(){
+  try {
+    document.body.classList.remove('gateBoot');
+  } catch(e){}
+}
+
+
   function readStoredAccess_(){
     try{
       const raw = localStorage.getItem(ACCESS_STORAGE_KEY);
