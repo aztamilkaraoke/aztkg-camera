@@ -264,7 +264,7 @@ function initGate_(){
 }
 
   function setRecorderPill(state) {
-  localRecorderState = state || localRecorderState || 'idle';
+  const effectiveState = state || localRecorderState || 'idle';
 
   const map = {
     idle: 'Recorder: Idle',
@@ -273,7 +273,7 @@ function initGate_(){
     error: 'Recorder: Error'
   };
 
-  setTop(els.recState, map[localRecorderState] || 'Recorder: —');
+  setTop(els.recState, map[effectiveState] || 'Recorder: —');
 }
 
   function setDebug(text, isWarn) {
@@ -576,7 +576,7 @@ function applyFocus(perf, mode) {
 
     lastMode = mode;
 
-    setRecorderPill(cameraStatus.recorderState || localRecorderState || 'idle');
+    setRecorderPill(localRecorderState || 'idle');
 
     if (mode === 'SPLASH') {
       applyFocus(null, 'idle');
