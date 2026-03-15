@@ -1397,23 +1397,29 @@ els.recentText.addEventListener('click', async function(evt){
       }
     })
     .catch(function(err){
-      const msg = String(
-        err && err.name
-          ? (err.name + ': ' + (err.message || ''))
-          : (err && err.message || err || 'Camera initialization failed')
-      );
+  const msg = String(
+    err && err.name
+      ? (err.name + ': ' + (err.message || ''))
+      : (err && err.message || err || 'Camera initialization failed')
+  );
 
-      setTop(els.camReady, 'Camera: Error');
-      setDebug(msg, true);
+  setTop(els.camReady, 'Camera: Error');
+  setTop(els.quality, 'Quality: —');
+  setDebug(msg, true);
 
-      updateHeartbeat({
-        pageOpen: '1',
-        cameraReady: '0',
-        streamReady: '0',
-        recorderState: 'error',
-        lastError: msg
-      });
+  updateHeartbeat({
+    pageOpen: '1',
+    cameraReady: '0',
+    streamReady: '0',
+    recorderState: 'error',
+    lastError: msg
+  });
 
-      alert('Camera initialization failed.\n\n' + msg);
-    });
+  // Keep system alive so Recover button works
+  setInterval(tick, 1000);
+  poll();
+  restartPollLoop(false);
+
+  console.warn('Camera initialization failed. Use RECOVER CAMERA to retry.', msg);
+});
 })();
