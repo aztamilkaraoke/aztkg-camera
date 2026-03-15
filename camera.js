@@ -24,6 +24,9 @@
   const OPFS_CLIPS_DIR = 'clips';
   let opfsClipIndex = [];
   let localRecorderState = 'idle';
+  let localCameraReady = '0';
+  let localStreamReady = '0';
+  let localLastError = '';
   const ACCESS_ROLE = 'camera';
   const ACCESS_STORAGE_KEY = 'aztkg.consoleAccess.camera';
   let gateValidated = false;
@@ -960,6 +963,11 @@ setDebug(
     setDebug('Camera initialized. Syncing meet state…', false);
     setRecorderPill('idle');
 
+    localCameraReady = '1';
+    localStreamReady = '1';
+    localRecorderState = 'idle';
+    localLastError = '';
+
 const ps = await ensurePersistentStorage();
 
 if (ps.supported) {
@@ -1010,14 +1018,17 @@ await requestWakeLock();
   } catch (e) {}
 
   stream = null;
-  recorder = null;
-  chunks = [];
-  activePerf = null;
-  activePerfStartedAtIso = '';
-  recordingStartedAtMs = 0;
-  setRecorderPill('idle');
-  updateStopButton(false);
-  return true;
+recorder = null;
+chunks = [];
+activePerf = null;
+activePerfStartedAtIso = '';
+recordingStartedAtMs = 0;
+localCameraReady = '0';
+localStreamReady = '0';
+localRecorderState = 'idle';
+setRecorderPill('idle');
+updateStopButton(false);
+return true;
 }
 
 async function recoverCamera_() {
@@ -1047,15 +1058,19 @@ async function recoverCamera_() {
     );
 
     setTop(els.camReady, 'Camera: Error');
-    setDebug(msg, true);
+setDebug(msg, true);
+localCameraReady = '0';
+localStreamReady = '0';
+localRecorderState = 'error';
+localLastError = msg;
 
-    updateHeartbeat({
-      pageOpen: '1',
-      cameraReady: '0',
-      streamReady: '0',
-      recorderState: 'error',
-      lastError: msg
-    });
+updateHeartbeat({
+  pageOpen: '1',
+  cameraReady: '0',
+  streamReady: '0',
+  recorderState: 'error',
+  lastError: msg
+});
   }
 }
 
@@ -1063,9 +1078,10 @@ function updateHeartbeat(extra) {
   const params = Object.assign({
     api: 'camera-status',
     pageOpen: '1',
-    cameraReady: stream ? '1' : '0',
-    streamReady: stream ? '1' : '0',
+    cameraReady: localCameraReady,
+    streamReady: localStreamReady,
     recorderState: localRecorderState || 'idle',
+    lastError: localLastError || '',
     storageMode: 'opfs',
     _ts: Date.now()
   }, extra || {});
@@ -1101,11 +1117,13 @@ function startRecording(perf, commandSeq) {
 
 recorder.onerror = function(e) {
   setDebug('Recorder error', true);
-  setRecorderPill('error');
-  updateHeartbeat({
-    recorderState: 'error',
-    lastError: String((e && e.error && e.error.message) || 'Recorder error')
-  });
+setRecorderPill('error');
+localRecorderState = 'error';
+localLastError = String((e && e.error && e.error.message) || 'Recorder error');
+updateHeartbeat({
+  recorderState: 'error',
+  lastError: localLastError
+});
 };
 
   recorder.onstop = async function() {
@@ -1138,25 +1156,32 @@ recorder.onerror = function(e) {
         }).toString()
       );
 
-      updateHeartbeat({
-        recorderState: 'idle',
-        currentPerformanceId: '',
-        lastSavedFilename: filename,
-        lastError: ''
-      });
+      localRecorderState = 'idle';
+localLastError = '';
+localCameraReady = '1';
+localStreamReady = '1';
 
-      setRecorderPill('idle');
+updateHeartbeat({
+  recorderState: 'idle',
+  currentPerformanceId: '',
+  lastSavedFilename: filename,
+  lastError: ''
+});
+
+setRecorderPill('idle');
 
     } catch (err) {
       const msg = String(err && err.message || err || 'Clip save failed');
 
       setDebug('Clip save failed.', true);
-      setRecorderPill('error');
-      updateHeartbeat({
-        recorderState: 'error',
-        currentPerformanceId: '',
-        lastError: msg
-      });
+setRecorderPill('error');
+localRecorderState = 'error';
+localLastError = msg;
+updateHeartbeat({
+  recorderState: 'error',
+  currentPerformanceId: '',
+  lastError: msg
+});
     } finally {
       recorder = null;
       activePerf = null;
@@ -1172,13 +1197,16 @@ recorder.onerror = function(e) {
   recorder.start(2000);
   lastProcessedCommandSeq = commandSeq;
 
-  updateHeartbeat({
-    recorderState: 'recording',
-    currentCommandSeq: commandSeq,
-    currentPerformanceId: perf.performanceId || '',
-    recordingStartedAt: perf.startedAt || new Date().toISOString(),
-    lastError: ''
-  });
+  localRecorderState = 'recording';
+localLastError = '';
+
+updateHeartbeat({
+  recorderState: 'recording',
+  currentCommandSeq: commandSeq,
+  currentPerformanceId: perf.performanceId || '',
+  recordingStartedAt: perf.startedAt || new Date().toISOString(),
+  lastError: ''
+});
 
   setDebug('Recording in progress...', false);
   setRecorderPill('recording');
@@ -1194,10 +1222,12 @@ recorder.onerror = function(e) {
 
     lastProcessedCommandSeq = commandSeq;
 
-    updateHeartbeat({
-      recorderState: 'saving',
-      currentCommandSeq: commandSeq
-    });
+    localRecorderState = 'saving';
+
+updateHeartbeat({
+  recorderState: 'saving',
+  currentCommandSeq: commandSeq
+});
 
     setDebug('Stopping recorder...', false);
     setRecorderPill('saving');
@@ -1400,16 +1430,20 @@ els.recentText.addEventListener('click', async function(evt){
   );
 
   setTop(els.camReady, 'Camera: Error');
-  setTop(els.quality, 'Quality: —');
-  setDebug(msg, true);
+setTop(els.quality, 'Quality: —');
+setDebug(msg, true);
+localCameraReady = '0';
+localStreamReady = '0';
+localRecorderState = 'error';
+localLastError = msg;
 
-  updateHeartbeat({
-    pageOpen: '1',
-    cameraReady: '0',
-    streamReady: '0',
-    recorderState: 'error',
-    lastError: msg
-  });
+updateHeartbeat({
+  pageOpen: '1',
+  cameraReady: '0',
+  streamReady: '0',
+  recorderState: 'error',
+  lastError: msg
+});
 
   // Keep system alive so Recover button works
   setInterval(tick, 1000);
