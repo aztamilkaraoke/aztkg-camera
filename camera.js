@@ -1074,6 +1074,43 @@ updateHeartbeat({
   }
 }
 
+  function refreshMediaHealth_() {
+  const v = stream && stream.getVideoTracks ? stream.getVideoTracks()[0] : null;
+  const a = stream && stream.getAudioTracks ? stream.getAudioTracks()[0] : null;
+
+  const videoLive = !!(v && v.readyState === 'live' && v.enabled !== false);
+  const audioLive = !!(a && a.readyState === 'live' && a.enabled !== false);
+
+  if (videoLive && audioLive) {
+    localCameraReady = '1';
+    localStreamReady = '1';
+    localLastError = '';
+
+    if (localRecorderState === 'error') {
+      localRecorderState = 'idle';
+    }
+
+    setTop(els.camReady, 'Camera: Ready');
+    return;
+  }
+
+  const msg =
+    (!videoLive && !audioLive) ? 'Camera and microphone unavailable' :
+    (!videoLive) ? 'Camera unavailable' :
+    'Microphone unavailable';
+
+  localCameraReady = '0';
+  localStreamReady = '0';
+  localLastError = msg;
+
+  if (localRecorderState !== 'recording' && localRecorderState !== 'saving') {
+    localRecorderState = 'error';
+  }
+
+  setTop(els.camReady, 'Camera: Error');
+  setDebug(msg, true);
+}
+
 function updateHeartbeat(extra) {
   const params = Object.assign({
     api: 'camera-status',
@@ -1305,7 +1342,8 @@ updateHeartbeat({
         }
       }
 
-            // Always keep the core camera UI/state pipeline alive
+                  // Always keep the core camera UI/state pipeline alive
+      refreshMediaHealth_();
       applyState(st);
 
       updateHeartbeat();
