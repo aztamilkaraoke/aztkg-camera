@@ -1061,11 +1061,14 @@ async function recoverCamera_() {
 
 function updateHeartbeat(extra) {
   const params = Object.assign({
-  api: 'camera-status',
-  pageOpen: '1',
-  storageMode: 'opfs',
-  _ts: Date.now()
-}, extra || {});
+    api: 'camera-status',
+    pageOpen: '1',
+    cameraReady: stream ? '1' : '0',
+    streamReady: stream ? '1' : '0',
+    recorderState: localRecorderState || 'idle',
+    storageMode: 'opfs',
+    _ts: Date.now()
+  }, extra || {});
   beaconGet(params);
 }
 
