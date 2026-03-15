@@ -1,7 +1,7 @@
 (function(){
   const APPS_SCRIPT_BASE = 'https://script.google.com/macros/s/AKfycbxKyrSPRTaQ_QWV2csWPfywQUirH7iizglA4TMpSkAAfP4GaT0x3Pi26NK6nF7kCHSyeg/exec';
   const FAST_POLL_MS = 1000;
-  const IDLE_POLL_MS = 3000;
+  const IDLE_POLL_MS = 1000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
 
   let stream = null;
