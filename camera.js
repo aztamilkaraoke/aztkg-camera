@@ -1072,13 +1072,13 @@ recorder.onerror = function(e) {
 
       setRecorderPill('idle');
 
-    } catch (err) {
+        } catch (err) {
       const msg = String(err && err.message || err || 'Clip save failed');
 
       setDebug('Clip save failed.', true);
       setRecorderPill('error');
       updateHeartbeat({
-        recorderState: 'error',
+        recorderState: 'idle',
         currentPerformanceId: '',
         lastError: msg
       });
