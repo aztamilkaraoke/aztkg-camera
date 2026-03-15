@@ -52,7 +52,8 @@
     debugLine: document.getElementById('debugLine'),
     btnEmergencyStop: document.getElementById('btnEmergencyStop'),
     btnArmStorage: document.getElementById('btnArmStorage'),
-    btnRefreshState: document.getElementById('btnRefreshState')
+    btnRefreshState: document.getElementById('btnRefreshState'),
+    btnRecoverCamera: document.getElementById('btnRecoverCamera')
   };
 
   function setTop(el, text) {
@@ -1327,14 +1328,6 @@ recorder.onerror = function(e) {
   });
 
   if (els.btnRecoverCamera) {
-    els.btnRecoverCamera.addEventListener('click', function(){
-      recoverCamera_();
-    });
-  }
-
-  btnRecoverCamera: document.getElementById('btnRecoverCamera')
-
-    if (els.btnRecoverCamera) {
     els.btnRecoverCamera.addEventListener('click', function(){
       recoverCamera_();
     });
