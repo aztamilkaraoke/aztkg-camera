@@ -987,6 +987,77 @@ updateStopButton(false);
 await requestWakeLock();
   }
 
+  function stopStreamTracks_() {
+  try {
+    if (recorder && recorder.state === 'recording') {
+      return false;
+    }
+  } catch (e) {}
+
+  try {
+    if (stream) {
+      stream.getTracks().forEach(function(track) {
+        try { track.stop(); } catch (e) {}
+      });
+    }
+  } catch (e) {}
+
+  try {
+    if (els.preview) {
+      els.preview.srcObject = null;
+    }
+  } catch (e) {}
+
+  stream = null;
+  recorder = null;
+  chunks = [];
+  activePerf = null;
+  activePerfStartedAtIso = '';
+  recordingStartedAtMs = 0;
+  setRecorderPill('idle');
+  updateStopButton(false);
+  return true;
+}
+
+async function recoverCamera_() {
+  if (recorder && recorder.state === 'recording') {
+    setDebug('Cannot recover while recording is active.', true);
+    return;
+  }
+
+  setDebug('Recovering camera…', false);
+  setTop(els.camReady, 'Camera: Recovering…');
+  setTop(els.quality, 'Quality: —');
+
+  stopStreamTracks_();
+
+  try {
+    await initMedia();
+    await loadOpfsClipIndex();
+    renderClipPanel();
+    await poll();
+    restartPollLoop(false);
+    setDebug('Camera recovered. Ready for next song.', false);
+  } catch (err) {
+    const msg = String(
+      err && err.name
+        ? (err.name + ': ' + (err.message || ''))
+        : (err && err.message || err || 'Camera recovery failed')
+    );
+
+    setTop(els.camReady, 'Camera: Error');
+    setDebug(msg, true);
+
+    updateHeartbeat({
+      pageOpen: '1',
+      cameraReady: '0',
+      streamReady: '0',
+      recorderState: 'error',
+      lastError: msg
+    });
+  }
+}
+
 function updateHeartbeat(extra) {
   const params = Object.assign({
   api: 'camera-status',
@@ -1254,6 +1325,20 @@ recorder.onerror = function(e) {
     renderClipPanel();
     poll();
   });
+
+  if (els.btnRecoverCamera) {
+    els.btnRecoverCamera.addEventListener('click', function(){
+      recoverCamera_();
+    });
+  }
+
+  btnRecoverCamera: document.getElementById('btnRecoverCamera')
+
+    if (els.btnRecoverCamera) {
+    els.btnRecoverCamera.addEventListener('click', function(){
+      recoverCamera_();
+    });
+  }
 
 els.recentText.addEventListener('change', function(evt){
   const sel = evt.target.closest('#clipPicker');
