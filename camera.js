@@ -1,7 +1,7 @@
 (function(){
   const APPS_SCRIPT_BASE = 'https://script.google.com/macros/s/AKfycbxKyrSPRTaQ_QWV2csWPfywQUirH7iizglA4TMpSkAAfP4GaT0x3Pi26NK6nF7kCHSyeg/exec';
   const FAST_POLL_MS = 1500;
-  const IDLE_POLL_MS = 5000;
+  const IDLE_POLL_MS = 2000;
   const MAX_CLIP_MS = 12 * 60 * 1000;
 
   let stream = null;
@@ -1305,15 +1305,15 @@ updateHeartbeat({
         }
       }
 
-      // Always keep the core camera UI/state pipeline alive
+            // Always keep the core camera UI/state pipeline alive
       applyState(st);
+
+      updateHeartbeat();
 
       // Only honor recorder commands when this console is authorized
       if (gateValidated) {
         handleCommand(st);
       }
-
-      updateHeartbeat();
 
       // Graceful rotation:
       // existing session stays alive on key change
