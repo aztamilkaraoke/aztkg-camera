@@ -1130,9 +1130,15 @@ updateHeartbeat({
 
     syncBatteryTelemetry_();
 
-    if (bm && bm.addEventListener) {
-      bm.addEventListener('levelchange', syncBatteryTelemetry_);
-      bm.addEventListener('chargingchange', syncBatteryTelemetry_);
+        if (bm && bm.addEventListener) {
+      bm.addEventListener('levelchange', function() {
+        syncBatteryTelemetry_();
+        updateHeartbeat();
+      });
+      bm.addEventListener('chargingchange', function() {
+        syncBatteryTelemetry_();
+        updateHeartbeat();
+      });
     }
   } catch (e) {
     localBatterySupported = '0';
