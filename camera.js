@@ -1151,7 +1151,7 @@ function syncBatteryTelemetry_() {
   }
 
   localBatterySupported = '1';
-  localBatteryLevelPct = Math.max(0, Math.min(100, Math.round(Number(batteryManager.level || 0) * 100)));
+  localBatteryLevelPct = Math.max(0, Math.min(100, Math.floor(Number(batteryManager.level || 0) * 100)));
   localBatteryCharging = batteryManager.charging ? '1' : '0';
 }
 
