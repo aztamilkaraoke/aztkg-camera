@@ -23,10 +23,14 @@
   let opfsRootHandle = null;
   const OPFS_CLIPS_DIR = 'clips';
   let opfsClipIndex = [];
-  let localRecorderState = 'idle';
+    let localRecorderState = 'idle';
   let localCameraReady = '0';
   let localStreamReady = '0';
   let localLastError = '';
+  let localBatterySupported = '0';
+  let localBatteryLevelPct = -1;
+  let localBatteryCharging = '0';
+  let batteryManager = null;
   const ACCESS_ROLE = 'camera';
   const ACCESS_STORAGE_KEY = 'aztkg.consoleAccess.camera';
   let gateValidated = false;
@@ -968,6 +972,8 @@ setDebug(
     localRecorderState = 'idle';
     localLastError = '';
 
+    await initBatteryTelemetry();
+
 const ps = await ensurePersistentStorage();
 
 if (ps.supported) {
@@ -978,8 +984,7 @@ if (ps.supported) {
   }
 }
 
-beaconGet({
-  api: 'camera-status',
+updateHeartbeat({
   pageOpen: '1',
   cameraReady: '1',
   streamReady: '1',
@@ -988,8 +993,7 @@ beaconGet({
   actualWidth: s.width || 0,
   actualHeight: s.height || 0,
   actualFps: s.frameRate || 0,
-  lastError: '',
-  _ts: Date.now()
+  lastError: ''
 });
 
 updateStopButton(false);
@@ -1111,7 +1115,51 @@ updateHeartbeat({
   setDebug(msg, true);
 }
 
+  async function initBatteryTelemetry() {
+  localBatterySupported = '0';
+  localBatteryLevelPct = -1;
+  localBatteryCharging = '0';
+  batteryManager = null;
+
+  try {
+    if (!navigator.getBattery) return;
+
+    const bm = await navigator.getBattery();
+    batteryManager = bm;
+    localBatterySupported = '1';
+
+    syncBatteryTelemetry_();
+
+    if (bm && bm.addEventListener) {
+      bm.addEventListener('levelchange', syncBatteryTelemetry_);
+      bm.addEventListener('chargingchange', syncBatteryTelemetry_);
+    }
+  } catch (e) {
+    localBatterySupported = '0';
+    localBatteryLevelPct = -1;
+    localBatteryCharging = '0';
+    batteryManager = null;
+  }
+}
+
+function syncBatteryTelemetry_() {
+  if (!batteryManager) {
+    localBatterySupported = '0';
+    localBatteryLevelPct = -1;
+    localBatteryCharging = '0';
+    return;
+  }
+
+  localBatterySupported = '1';
+  localBatteryLevelPct = Math.max(0, Math.min(100, Math.round(Number(batteryManager.level || 0) * 100)));
+  localBatteryCharging = batteryManager.charging ? '1' : '0';
+}
+
 function updateHeartbeat(extra) {
+  if (batteryManager) {
+    syncBatteryTelemetry_();
+  }
+
   const params = Object.assign({
     api: 'camera-status',
     pageOpen: '1',
@@ -1120,6 +1168,9 @@ function updateHeartbeat(extra) {
     recorderState: localRecorderState || 'idle',
     lastError: localLastError || '',
     storageMode: 'opfs',
+    batterySupported: localBatterySupported,
+    batteryLevelPct: localBatteryLevelPct,
+    batteryCharging: localBatteryCharging,
     _ts: Date.now()
   }, extra || {});
   beaconGet(params);
