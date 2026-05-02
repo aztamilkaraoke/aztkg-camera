@@ -1,3 +1,8 @@
+window.onerror = function(msg, src, line, col, err) {
+  document.body.innerHTML = '<div style="color:red;font-size:16px;padding:20px;word-break:break-all">' +
+    'JS ERROR: ' + msg + '<br>Line: ' + line + '<br>File: ' + src + '</div>';
+};
+
 (function(){
   const APPS_SCRIPT_BASE = 'https://script.google.com/macros/s/AKfycbxKyrSPRTaQ_QWV2csWPfywQUirH7iizglA4TMpSkAAfP4GaT0x3Pi26NK6nF7kCHSyeg/exec';
   const FAST_POLL_MS = 1000;
