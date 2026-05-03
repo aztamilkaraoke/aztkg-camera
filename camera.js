@@ -203,10 +203,7 @@ async function submitGateKey_(){
   setGateBusy_(true);
 
   try {
-    const res = await jsonp(
-      APPS_SCRIPT_BASE +
-      '?api=validate-meet-access&inputKey=' + encodeURIComponent(inputKey)
-    );
+    const res = await apiFetch('validate-meet-access', { inputKey: inputKey });
 
     gateSubmitInFlight = false;
     setGateBusy_(false);
@@ -343,13 +340,39 @@ function initGate_(){
   });
 
   // ── Network layer ────────────────────────────────────────────────────────
-  // JSONP for calls needing a response (validate, poll, clip-saved).
-  // fetch no-cors for fire-and-forget heartbeat pings only.
-  //
-  // NOTE: fetch() POST to Apps Script was attempted for iPhone compatibility
-  // but Apps Script redirects produce opaque responses that cannot be parsed.
-  // JSONP works on both Android and iPhone as long as browser cache is clear.
+  // All calls go through the Cloudflare Worker proxy which adds CORS headers.
+  // This fixes iPhone/Safari ITP blocking of direct script.google.com requests.
+  // fetch() works reliably on both Android and iPhone through the Worker.
 
+  const PROXY_BASE = 'https://aztk-proxy.aztamilkaraoke.workers.dev';
+
+  async function apiFetch(apiName, params, mode) {
+    const body = Object.assign({ api: apiName, _ts: Date.now() }, params || {});
+
+    if (mode === 'fire-and-forget') {
+      try {
+        fetch(PROXY_BASE, {
+          method:  'POST',
+          mode:    'cors',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(body)
+        });
+      } catch (_) {}
+      return Promise.resolve();
+    }
+
+    const res = await fetch(PROXY_BASE, {
+      method:  'POST',
+      mode:    'cors',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body)
+    });
+
+    if (!res.ok) throw new Error('Server returned ' + res.status);
+    return await res.json();
+  }
+
+  // JSONP kept as emergency fallback only — not called in normal operation
   function jsonp(url) {
     return new Promise(function(resolve, reject) {
       const cbName = '__camJsonpCb_' + (++jsonpCounter);
@@ -365,44 +388,19 @@ function initGate_(){
 
       window[cbName] = function(data) {
         if (done) return;
-        done = true;
-        cleanup();
-        resolve(data);
+        done = true; cleanup(); resolve(data);
       };
-
       script.onerror = function() {
         if (done) return;
-        done = true;
-        cleanup();
-        reject(new Error('JSONP load failed'));
+        done = true; cleanup(); reject(new Error('JSONP load failed'));
       };
-
       script.src = fullUrl;
       document.body.appendChild(script);
-
       setTimeout(function() {
         if (done) return;
-        done = true;
-        cleanup();
-        reject(new Error('JSONP timeout'));
+        done = true; cleanup(); reject(new Error('JSONP timeout'));
       }, 20000);
     });
-  }
-
-  // apiFetch — fire-and-forget only (heartbeat/status pings)
-  function apiFetch(apiName, params, mode) {
-    if (mode === 'fire-and-forget') {
-      try {
-        fetch(APPS_SCRIPT_BASE, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(Object.assign({ api: apiName, _ts: Date.now() }, params || {}))
-        });
-      } catch (_) {}
-      return Promise.resolve();
-    }
-    return Promise.resolve();
   }
   // ── end network layer ────────────────────────────────────────────────────
 
@@ -1401,16 +1399,14 @@ updateHeartbeat({
       renderClipPanel();
       }
 
-      await jsonp(
-        APPS_SCRIPT_BASE + '?' + new URLSearchParams({
-          api: 'camera-clip-saved',
+      await apiFetch('camera-clip-saved', {
+        payload: {
           performanceId: activePerf ? activePerf.performanceId : '',
           seqNo:         activePerf ? activePerf.seqNo : '',
           songName:      activePerf ? activePerf.songName : '',
-          savedFileName: filename,
-          _ts:           Date.now()
-        }).toString()
-      );
+          savedFileName: filename
+        }
+      });
 
       localRecorderState = 'idle';
 localLastError = '';
@@ -1535,7 +1531,7 @@ updateHeartbeat({
     setTop(els.netState, 'Network: Syncing');
 
     try {
-      const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
+      const st = await apiFetch('camera-state');
 
       const ma = st && st.meetAccess ? st.meetAccess : null;
       const storedValid = validateStoredAccessAgainstState_(st);
