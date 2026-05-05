@@ -203,7 +203,10 @@ async function submitGateKey_(){
   setGateBusy_(true);
 
   try {
-    const res = await apiFetch('validate-meet-access', { inputKey: inputKey });
+    const res = await jsonp(
+      APPS_SCRIPT_BASE +
+      '?api=validate-meet-access&inputKey=' + encodeURIComponent(inputKey)
+    );
 
     gateSubmitInFlight = false;
     setGateBusy_(false);
@@ -268,11 +271,10 @@ function initGate_(){
   const effectiveState = state || localRecorderState || 'idle';
 
   const map = {
-    idle:       'Recorder: Idle',
-    recording:  'Recorder: Recording',
-    saving:     'Recorder: Saving',
-    converting: 'Recorder: Converting',
-    error:      'Recorder: Error'
+    idle: 'Recorder: Idle',
+    recording: 'Recorder: Recording',
+    saving: 'Recorder: Saving',
+    error: 'Recorder: Error'
   };
 
   setTop(els.recState, map[effectiveState] || 'Recorder: —');
@@ -302,14 +304,11 @@ function initGate_(){
   }
 
   function chooseMime() {
-    // H.264/AAC MP4 first — natively supported on S24 and iPhone with zero
-    // post-processing and guaranteed OneDrive compatibility.
-    // Falls back to WebM only if the device doesn't support MP4 capture.
     const prefs = [
       'video/mp4;codecs=avc1,mp4a.40.2',
       'video/mp4',
-      'video/webm;codecs=vp8,opus',
       'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
       'video/webm'
     ];
 
@@ -339,40 +338,6 @@ function initGate_(){
     if (document.visibilityState === 'visible') requestWakeLock();
   });
 
-  // ── Network layer ────────────────────────────────────────────────────────
-  // All calls go through the Cloudflare Worker proxy which adds CORS headers.
-  // This fixes iPhone/Safari ITP blocking of direct script.google.com requests.
-  // fetch() works reliably on both Android and iPhone through the Worker.
-
-  const PROXY_BASE = 'https://aztk-proxy.aztamilkaraoke.workers.dev';
-
-  async function apiFetch(apiName, params, mode) {
-    const body = Object.assign({ api: apiName, _ts: Date.now() }, params || {});
-
-    if (mode === 'fire-and-forget') {
-      try {
-        fetch(PROXY_BASE, {
-          method:  'POST',
-          mode:    'cors',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(body)
-        });
-      } catch (_) {}
-      return Promise.resolve();
-    }
-
-    const res = await fetch(PROXY_BASE, {
-      method:  'POST',
-      mode:    'cors',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body)
-    });
-
-    if (!res.ok) throw new Error('Server returned ' + res.status);
-    return await res.json();
-  }
-
-  // JSONP kept as emergency fallback only — not called in normal operation
   function jsonp(url) {
     return new Promise(function(resolve, reject) {
       const cbName = '__camJsonpCb_' + (++jsonpCounter);
@@ -388,21 +353,35 @@ function initGate_(){
 
       window[cbName] = function(data) {
         if (done) return;
-        done = true; cleanup(); resolve(data);
+        done = true;
+        cleanup();
+        resolve(data);
       };
+
       script.onerror = function() {
         if (done) return;
-        done = true; cleanup(); reject(new Error('JSONP load failed'));
+        done = true;
+        cleanup();
+        reject(new Error('JSONP load failed'));
       };
+
       script.src = fullUrl;
       document.body.appendChild(script);
-      setTimeout(function() {
+
+          setTimeout(function() {
         if (done) return;
-        done = true; cleanup(); reject(new Error('JSONP timeout'));
+        done = true;
+        cleanup();
+        reject(new Error('JSONP timeout'));
       }, 20000);
     });
   }
-  // ── end network layer ────────────────────────────────────────────────────
+
+  function beaconGet(params) {
+    const url = APPS_SCRIPT_BASE + '?' + new URLSearchParams(params).toString();
+    const img = new Image();
+    img.src = url;
+  }
 
     const idbKeyval = {
     async db() {
@@ -710,8 +689,7 @@ out.push({
   name: name,
   size: file.size || 0,
   modifiedMs: file.lastModified || 0,
-  displayLabel: (metaMap[name] && metaMap[name].displayLabel) || name,
-  format: (metaMap[name] && metaMap[name].format) || (name.toLowerCase().endsWith('.mp4') ? 'mp4' : 'webm')
+  displayLabel: (metaMap[name] && metaMap[name].displayLabel) || name
 });
         } catch (e) {}
       }
@@ -752,8 +730,11 @@ function rememberClipMeta(filename, perf) {
   const map = loadClipMetaMap();
   const seq = perf && perf.seqNo ? ('SEQ #' + perf.seqNo + ' - ') : '';
   const song = perf && perf.songName ? perf.songName : 'Untitled Song';
-  const ext = filename && filename.toLowerCase().endsWith('.mp4') ? 'mp4' : 'webm';
-  map[filename] = { displayLabel: seq + song, format: ext };
+
+  map[filename] = {
+    displayLabel: seq + song
+  };
+
   saveClipMetaMap(map);
 }
 
@@ -820,31 +801,15 @@ function renderClipPanel() {
     return;
   }
 
-  const hasWebm = opfsClipIndex.some(function(item) { return item.format === 'webm'; });
-  const first = opfsClipIndex[0];
-  const firstFmt = first.format === 'mp4' ? ' [MP4]' : ' [WebM]';
-
   const options = opfsClipIndex.map(function(item) {
-    const badge = item.format === 'mp4' ? ' [MP4]' : ' [WebM — convert before upload]';
     return (
       '<option value="' + encodeURIComponent(item.name) + '">' +
-        escapeHtml((item.displayLabel || item.name) + badge) +
+        escapeHtml(item.displayLabel || item.name) +
       '</option>'
     );
   }).join('');
 
-  const convertBtn = hasWebm
-    ? '<div style="margin-top:6px">' +
-        '<button data-convert-all="1" type="button" ' +
-          'style="width:100%;padding:8px 12px;border-radius:10px;background:#1d4ed8;color:#fff;' +
-          'border:none;font-weight:900;font-size:12px;cursor:pointer">' +
-          '\u2699 Convert WebM clips to MP4' +
-        '</button>' +
-        '<div style="margin-top:4px;font-size:10px;color:#94a3b8">' +
-          'Run after the meet ends before uploading to OneDrive' +
-        '</div>' +
-      '</div>'
-    : '<div style="margin-top:4px;font-size:10px;color:#4ade80">\u2713 All clips are MP4 \u2014 ready for OneDrive</div>';
+  const first = opfsClipIndex[0];
 
   els.recentText.innerHTML =
     '<div style="color:#cbd5e1;font-weight:800;margin-bottom:8px">' +
@@ -856,138 +821,13 @@ function renderClipPanel() {
         options +
       '</select>' +
       '<div id="clipPickerMeta" style="margin-top:4px;font-size:11px;color:#94a3b8">' +
-        escapeHtml(formatBytes(first.size)) + firstFmt +
+        escapeHtml(formatBytes(first.size)) +
       '</div>' +
       '<div style="margin-top:4px">' +
         '<a href="#" data-opfs-download-selected="1" style="color:#93c5fd;text-decoration:none;font-weight:800">Download Selected</a>' +
       '</div>' +
-      convertBtn +
     '</div>';
 }
-
-  // ── Post-meet ffmpeg.wasm converter ──────────────────────────────────────
-  // Only runs when operator clicks "Convert WebM clips to MP4" after the meet.
-  // Never runs during recording — no race condition possible.
-  const FFMPEG_CDN      = 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js';
-  const FFMPEG_CORE_CDN = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
-  let ffmpegInstance = null;
-  let ffmpegLoading  = false;
-  let ffmpegReady    = false;
-
-  async function ensureFfmpeg() {
-    if (ffmpegReady && ffmpegInstance) return ffmpegInstance;
-    if (ffmpegLoading) {
-      for (let i = 0; i < 150; i++) {
-        await new Promise(function(r) { setTimeout(r, 200); });
-        if (ffmpegReady) return ffmpegInstance;
-      }
-      throw new Error('ffmpeg load timed out');
-    }
-    ffmpegLoading = true;
-    try {
-      if (!window.FFmpegWASM) {
-        await new Promise(function(resolve, reject) {
-          const s = document.createElement('script');
-          s.src = FFMPEG_CDN;
-          s.onload = resolve;
-          s.onerror = function() { reject(new Error('Failed to load ffmpeg.js')); };
-          document.head.appendChild(s);
-        });
-      }
-      const { FFmpeg } = window.FFmpegWASM;
-      const ff = new FFmpeg();
-      await ff.load({
-        coreURL: FFMPEG_CORE_CDN + '/ffmpeg-core.js',
-        wasmURL: FFMPEG_CORE_CDN + '/ffmpeg-core.wasm'
-      });
-      ffmpegInstance = ff;
-      ffmpegReady    = true;
-      ffmpegLoading  = false;
-      return ff;
-    } catch (err) {
-      ffmpegLoading = false;
-      throw err;
-    }
-  }
-
-  async function transcodeWebmToMp4(inputBlob, onProgress) {
-    const ff = await ensureFfmpeg();
-    const { fetchFile } = window.FFmpegWASM;
-    if (typeof onProgress === 'function') {
-      ff.on('progress', function(p) {
-        onProgress(Math.min(99, Math.round((p.progress || 0) * 100)));
-      });
-    }
-    await ff.writeFile('input.webm', await fetchFile(inputBlob));
-    await ff.exec([
-      '-i',  'input.webm',
-      '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
-      '-c:a', 'aac', '-b:a', '128k',
-      '-movflags', '+faststart',
-      '-vsync', 'cfr', '-async', '1',
-      'output.mp4'
-    ]);
-    const data = await ff.readFile('output.mp4');
-    try { await ff.deleteFile('input.webm'); } catch(_) {}
-    try { await ff.deleteFile('output.mp4'); } catch(_) {}
-    return new Blob([data.buffer], { type: 'video/mp4' });
-  }
-
-  async function convertAllWebmClips() {
-    if (recorder && recorder.state === 'recording') {
-      setDebug('Cannot convert while recording is active. Wait until the meet ends.', true);
-      return;
-    }
-
-    await loadOpfsClipIndex();
-    const webmClips = opfsClipIndex.filter(function(item) { return item.format === 'webm'; });
-
-    if (!webmClips.length) {
-      setDebug('No WebM clips to convert.', false);
-      return;
-    }
-
-    setRecorderPill('converting');
-    setDebug('Loading converter\u2026 (one-time ~10MB download)', false);
-
-    let done = 0;
-    for (const item of webmClips) {
-      try {
-        setDebug('Converting ' + (done + 1) + '/' + webmClips.length + ': ' + escapeHtml(item.displayLabel || item.name), false);
-
-        const clipsDir = await getOpfsClipsDir();
-        const srcHandle = await clipsDir.getFileHandle(item.name, { create: false });
-        const srcFile   = await srcHandle.getFile();
-
-        const mp4Blob = await transcodeWebmToMp4(srcFile, function(pct) {
-          setDebug('Converting ' + (done + 1) + '/' + webmClips.length + ' (' + pct + '%): ' + escapeHtml(item.displayLabel || item.name), false);
-        });
-
-        const mp4Name    = item.name.replace(/\.webm$/i, '.mp4');
-        const saveResult = await writeBlobToOpfs(mp4Blob, mp4Name);
-
-        if (saveResult.ok) {
-          const map = loadClipMetaMap();
-          const old = map[item.name] || {};
-          map[mp4Name] = { displayLabel: old.displayLabel || mp4Name, format: 'mp4' };
-          saveClipMetaMap(map);
-          await clipsDir.removeEntry(item.name);
-          forgetClipMeta(item.name);
-          done++;
-        } else {
-          setDebug('Save failed for ' + escapeHtml(item.name) + ': ' + (saveResult.error || ''), true);
-        }
-      } catch (e) {
-        setDebug('Convert failed: ' + String(e && e.message || e), true);
-      }
-    }
-
-    await loadOpfsClipIndex();
-    renderClipPanel();
-    setRecorderPill('idle');
-    setDebug(done + '/' + webmClips.length + ' clip(s) converted to MP4. Ready for OneDrive.', false);
-  }
-  // ── end post-meet converter ───────────────────────────────────────────────
 
   async function writeBlobToOpfs(blob, filename) {
     const clipsDir = await getOpfsClipsDir();
@@ -1339,7 +1179,7 @@ function updateHeartbeat(extra) {
     batteryCharging: localBatteryCharging,
     _ts: Date.now()
   }, extra || {});
-  apiFetch('camera-status', params, 'fire-and-forget');
+  beaconGet(params);
 }
 
 function startRecording(perf, commandSeq) {
@@ -1399,14 +1239,16 @@ updateHeartbeat({
       renderClipPanel();
       }
 
-      await apiFetch('camera-clip-saved', {
-        payload: {
+      await jsonp(
+        APPS_SCRIPT_BASE + '?' + new URLSearchParams({
+          api: 'camera-clip-saved',
           performanceId: activePerf ? activePerf.performanceId : '',
-          seqNo:         activePerf ? activePerf.seqNo : '',
-          songName:      activePerf ? activePerf.songName : '',
-          savedFileName: filename
-        }
-      });
+          seqNo: activePerf ? activePerf.seqNo : '',
+          songName: activePerf ? activePerf.songName : '',
+          savedFileName: filename,
+          _ts: Date.now()
+        }).toString()
+      );
 
       localRecorderState = 'idle';
 localLastError = '';
@@ -1446,7 +1288,7 @@ updateHeartbeat({
     }
   };
 
-  recorder.start(5000); // 5s chunks — fewer boundaries = better A/V sync
+  recorder.start(2000);
   lastProcessedCommandSeq = commandSeq;
 
   localRecorderState = 'recording';
@@ -1531,7 +1373,7 @@ updateHeartbeat({
     setTop(els.netState, 'Network: Syncing');
 
     try {
-      const st = await apiFetch('camera-state');
+      const st = await jsonp(APPS_SCRIPT_BASE + '?api=camera-state');
 
       const ma = st && st.meetAccess ? st.meetAccess : null;
       const storedValid = validateStoredAccessAgainstState_(st);
@@ -1646,12 +1488,6 @@ els.recentText.addEventListener('click', async function(evt){
     } catch (e) {
       setDebug('Download failed.', true);
     }
-  }
-
-  const convertAll = evt.target.closest('[data-convert-all]');
-  if (convertAll) {
-    evt.preventDefault();
-    convertAllWebmClips();
   }
 });
 
